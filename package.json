@@ -1,0 +1,16 @@
+{
+  "name": "opencode-blueprint",
+  "version": "1.0.0",
+  "description": "One-command production-grade opencode setup: 21 MCPs, 10 plugins, 44 skills, global workflow, Kodus + PR-Agent review loops.",
+  "type": "module",
+  "bin": {
+    "opencode-blueprint": "./bin/setup.mjs"
+  },
+  "author": "Collaby Labs",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/collaby-org/opencode-blueprint.git"
+  },
+  "keywords": ["opencode", "ai-agents", "mcp", "setup", "workflow", "code-review"]
+}

@@ -1,0 +1,171 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "disabled_providers": [],
+  "instructions": ["AGENTS.md"],
+  "provider": {
+    "tokenharbor": {
+      "name": "Token Harbor",
+      "npm": "@ai-sdk/openai-compatible",
+      "options": {
+        "baseURL": "https://tokenharbor.ai/v1"
+      },
+      "models": {
+        "th-orchestra": {
+          "name": "Token Harbor"
+        },
+        "deepseek-v4.1-flash:free": {
+          "name": "DeepSeek V4.1 Flash"
+        },
+        "deepseek-v4-flash:free": {
+          "name": "DeepSeek V4 Flash"
+        },
+        "mimo-v2.5:free": {
+          "name": "MiMo V2.5"
+        }
+      }
+    },
+    "omnirouter": {
+      "name": "Omni Router",
+      "npm": "@ai-sdk/openai-compatible",
+      "options": {
+        "baseURL": "http://localhost:20128/v1"
+      },
+      "models": {
+        "auto": {
+          "name": "OmniRoute Auto"
+        }
+      }
+    }
+  },
+  "plugin": [
+    "opencode-mem",
+    "@tarquinen/opencode-dcp",
+    "oh-my-opencode-slim",
+    "opencode-github-release",
+    "opencode-telemetry",
+    "opencode-ralph-wiggum",
+    "envsitter-guard",
+    "opencode-log-sanitizer",
+    "opencode-command-inject"
+  ],
+  "mcp": {
+    "notion": {
+      "type": "remote",
+      "url": "https://mcp.notion.com/mcp",
+      "enabled": true
+    },
+    "github": {
+      "type": "remote",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "enabled": true
+    },
+    "context7": {
+      "type": "remote",
+      "url": "https://mcp.context7.com/mcp",
+      "headers": {
+        "Authorization": "Bearer {env:CONTEXT7_API_KEY}"
+      },
+      "enabled": true
+    },
+    "gcp-bigquery": {
+      "type": "remote",
+      "url": "https://bigquery.googleapis.com/mcp",
+      "enabled": true
+    },
+    "gcp-compute": {
+      "type": "remote",
+      "url": "https://compute.googleapis.com/mcp",
+      "enabled": true
+    },
+    "gcp-gke": {
+      "type": "remote",
+      "url": "https://container.googleapis.com/mcp",
+      "enabled": true
+    },
+    "gcp-run": {
+      "type": "remote",
+      "url": "https://run.googleapis.com/mcp",
+      "enabled": true
+    },
+    "gcp-storage": {
+      "type": "remote",
+      "url": "https://storage.googleapis.com/storage/mcp",
+      "enabled": true
+    },
+    "cloudflare": {
+      "type": "remote",
+      "url": "https://mcp.cloudflare.com/mcp",
+      "enabled": true
+    },
+    "supabase": {
+      "type": "remote",
+      "url": "https://mcp.supabase.com/mcp",
+      "enabled": true
+    },
+    "stripe": {
+      "type": "remote",
+      "url": "https://mcp.stripe.com",
+      "enabled": true
+    },
+    "figma": {
+      "type": "remote",
+      "url": "https://mcp.figma.com/mcp",
+      "enabled": true
+    },
+    "sentry": {
+      "type": "remote",
+      "url": "https://mcp.sentry.dev/mcp",
+      "headers": {
+        "Authorization": "Sentry-Bearer {env:SENTRY_ACCESS_TOKEN}"
+      },
+      "enabled": true
+    },
+    "google-analytics": {
+      "type": "local",
+      "command": ["pipx", "run", "analytics-mcp"],
+      "environment": {
+        "GOOGLE_APPLICATION_CREDENTIALS": "{env:GOOGLE_APPLICATION_CREDENTIALS}",
+        "GOOGLE_PROJECT_ID": "{env:GOOGLE_PROJECT_ID}"
+      },
+      "enabled": true
+    },
+    "prisma": {
+      "type": "local",
+      "command": ["npx", "-y", "prisma", "mcp"],
+      "enabled": true
+    },
+    "postgres": {
+      "type": "local",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-postgres", "{env:DATABASE_URL}"],
+      "enabled": true
+    },
+    "mongodb": {
+      "type": "local",
+      "command": ["npx", "-y", "mongodb-mcp-server@latest", "--readOnly"],
+      "environment": {
+        "MDB_MCP_CONNECTION_STRING": "{env:MDB_MCP_CONNECTION_STRING}"
+      },
+      "enabled": true
+    },
+    "redis": {
+      "type": "local",
+      "command": ["C:\\Users\\horgh\\AppData\\Local\\Programs\\Python\\Python314\\Scripts\\redis-mcp-server.exe", "--url", "{env:REDIS_URL}"],
+      "enabled": true
+    },
+    "kubernetes": {
+      "type": "local",
+      "command": ["npx", "-y", "kubernetes-mcp-server"],
+      "enabled": true
+    },
+    "expo": {
+      "type": "remote",
+      "url": "https://mcp.expo.dev/mcp",
+      "enabled": true
+    },
+    "lucide-animated": {
+      "type": "remote",
+      "url": "https://lucide-animated.com/mcp",
+      "enabled": true
+    }
+  }
+}
