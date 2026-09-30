@@ -6,4 +6,6 @@ package-lock.json
 Thumbs.db
 .env
 .env.local
+# Root session dumps (opencode session export artifacts) — never commit
+new-session---*.json
 .opencode/*.log

@@ -77,6 +77,14 @@ cp(join(REPO, "config", "opencode.jsonc"), join(TARGET, "opencode.jsonc"));
 cp(join(REPO, "AGENTS.md"), join(TARGET, "AGENTS.md"));
 cp(join(REPO, "config", "commands"), join(TARGET, "commands"));
 cp(join(REPO, "config", "plugins", "opencode-review"), join(TARGET, "plugins", "opencode-review"));
+// Copy .env.example as a starter template only — never overwrite an existing
+// (possibly filled-in) .env.example in TARGET.
+const envExampleDest = join(TARGET, ".env.example");
+if (!existsSync(envExampleDest)) {
+  cp(join(REPO, "config", ".env.example"), envExampleDest);
+} else {
+  log(`  skip ${envExampleDest} (already exists — not overwriting filled template)`);
+}
 
 log("== 3/6 local plugin deps (opencode-review) ==");
 run("npm", ["install", "--prefix", join(TARGET, "plugins", "opencode-review"), "@opencode-ai/plugin"]);
@@ -119,9 +127,11 @@ log("== 6/6 manual steps (cannot be automated) ==");
 log(`
   1. Auth:  kodus auth login   (or export KODUS_TEAM_KEY)
             gh auth login
-  2. Env (see config/.env.example): CONTEXT7_API_KEY, SENTRY_ACCESS_TOKEN,
-     GOOGLE_APPLICATION_CREDENTIALS, GOOGLE_PROJECT_ID, DATABASE_URL,
-     MDB_MCP_CONNECTION_STRING, REDIS_URL
+  2. Env (copy config/.env.example to .env in the opencode config dir, then fill values):
+      CONTEXT7_API_KEY, SENTRY_ACCESS_TOKEN,
+      GOOGLE_APPLICATION_CREDENTIALS, GOOGLE_PROJECT_ID, DATABASE_URL,
+      MDB_MCP_CONNECTION_STRING, REDIS_URL, OPENCODE_ZEN_API_KEY,
+      KODUS_TEAM_KEY (or: kodus auth login)
   3. Cluster: configure kubeconfig for the kubernetes MCP.
   4. Restart opencode (config is loaded once at startup).
   5. Per repo: run /pr-agent-setup once (adds PR-Agent Action; set OPENAI_KEY secret).
