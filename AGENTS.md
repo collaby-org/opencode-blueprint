@@ -105,6 +105,38 @@ Load the skills matching the target. Nothing else.
   press feedback), WCAG AA contrast, dark mode from the start, hero fits
   viewport, one accent color, one radius scale, mobile collapse explicit.
 
+## Design system (always)
+
+Every codebase with UI must carry a `/design-system` folder. Adapt its
+contents to the stack in `tech_stack.md` — the shape below assumes
+Next.js + Tailwind + shadcn; an Expo app gets native tokens/components
+instead. Never force the example onto a mismatched stack.
+
+- **Check first.** At the start of every UI task, check `/design-system`
+  exists and read `DESIGN_SYSTEM.md` + the `ai/` registry before designing.
+- **Create if missing — ask first.** If absent, ask the user which source
+  to build from: analyse the existing codebase, images / links / live
+  previews they provide, or both — then create it. Be very, very accurate
+  to the chosen source.
+- **Follow it.** New components must reuse existing ones, use design tokens
+  exclusively (semantic tokens per UI rules — never raw colors or hardcoded
+  palettes), and load the task-matching skills from Skill routing
+  (`shadcn`, `apple-design`, `animate`, `impeccable`, …).
+- **Shape (adapt per stack):** `README.md`, `DESIGN_SYSTEM.md`,
+  `tokens/` (colors, typography, spacing, radius, shadows, motion + index),
+  `components/<Name>/` (component, types, stories, docs, index),
+  `patterns/` (forms, dashboards, navigation, tables, empty-states,
+  responsive-layouts), `pages/`, `ai/` (`RULES.md`, `COMPONENT_MAP.json`,
+  `DESIGN_TOKENS.json`, `PAGE_PATTERNS.json`, `VALIDATION.md`),
+  `components.json`.
+- **Build protocol.** Inspect the page → search the registry → reuse
+  components → apply page patterns → tokens only → responsive check →
+  validate → fix → re-validate. Do not create a new component unless
+  necessary; when one is, document it, register it, add stories + tests.
+- **Document composition, not just components** (page → sections →
+  components with assembly rules), give real examples, and keep validation
+  deterministic — never make the AI decide what the system already defines.
+
 ## Data & backend rules
 
 - Prisma: migrations via `prisma` MCP (`migrate-dev`), never hand-edit
@@ -147,6 +179,42 @@ repo carries `.github/workflows/pr-agent.yml` + `.pr_agent.toml`.
 - Memory (`opencode-mem`) captures durable facts automatically; don't
   re-derive decided conventions. Costs roll into `opencode-telemetry`.
 - Conflicts you can't resolve confidently: stop and report.
+
+## Global AGENTS.md (always)
+
+The repo's `AGENTS.md` must always match the global one
+(`~/.config/opencode/AGENTS.md`, sourced from this blueprint).
+
+- **Check first.** At the start of every task, check the repo has `AGENTS.md`.
+- **Copy if missing.** If it does not exist, copy the global file in as-is.
+- **Replace if different.** If it exists, compare it with the global file —
+  if not identical, replace it with the global version. Never leave a
+  diverged `AGENTS.md` behind.
+
+## Living docs (always)
+
+Every repo must carry these five files at its root (or per app, if monorepo):
+`changelog.md`, `system_diagram.md`, `targets.md`, `roadmap.md`, `tech_stack.md`.
+
+- **Check first.** At the start of every task, check whether each file exists
+  and read every one that does — before planning, not after.
+- **Create if missing.** If any file is absent, create it by analysing the
+  actual codebase (code, configs, manifests, migrations — never guess).
+  Be very, very accurate: every entry must reflect what is really there.
+- **Update after each task.** After every individual task, update all five:
+  what changed, what is now true, what is next. Keep them tight, clean,
+  and very accurate — short factual lines, no filler, no aspirational claims.
+  Stale docs are a bug: never leave them behind the code.
+- **Contents:** `changelog.md` = dated entries per change (with app scope in
+  multi-app repos); `system_diagram.md` = real architecture and data flow
+  (mermaid ok); `targets.md` = current acceptance criteria and their status;
+  `roadmap.md` = sequenced next steps, checked off as done; `tech_stack.md` =
+  actual runtimes, frameworks, DBs, and versions in use.
+- **Versions.** Bump the app version when the change warrants it (fix →
+  patch `0.1.0` to `0.1.1`, feature → minor, breaking → major). In a
+  multi-app codebase (e.g. 3 apps), version and changelog each app
+  independently — bump only the app(s) that changed, when you judge it is
+  time, and record the bump in that app's `changelog.md`.
 
 ## Completing a task
 
