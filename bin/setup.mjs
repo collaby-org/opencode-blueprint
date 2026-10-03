@@ -37,6 +37,8 @@ const has = (cmd) => {
 const SKILLS = [
   ["xirothedev/skills", ["nestjs-best-practices", "nextjs-best-practices", "nextjs-nestjs-integration"]],
   ["prisma/skills", ["prisma-database-setup", "prisma-client-api", "prisma-cli", "prisma-postgres", "prisma-postgres-setup", "prisma-upgrade-v7", "prisma-mongodb-upgrade"]],
+  ["Jeffallan/claude-skills", ["api-designer", "architecture-designer", "code-documenter", "code-reviewer", "database-optimizer", "debugging-wizard", "devops-engineer", "feature-forge", "fullstack-guardian", "graphql-architect", "javascript-pro", "kubernetes-specialist", "legacy-modernizer", "mcp-developer", "microservices-architect", "monitoring-expert", "nestjs-expert", "nextjs-developer", "playwright-expert", "postgres-pro", "react-expert", "secure-code-guardian", "security-reviewer", "spec-miner", "terraform-engineer", "test-master", "the-fool", "typescript-pro", "websocket-engineer"]],
+  ["microsoft/azure-skills", ["microsoft-foundry"]],
   ["vercel-labs/agent-skills", ["vercel-react-best-practices"]],
   ["michaelshimeles/skills", ["before-and-after", "code-structure", "evidence-driven-testing", "new-feature", "unslop"]],
   ["kodustech/kodus-ai", ["perf-debug"]],
@@ -77,6 +79,14 @@ cp(join(REPO, "config", "opencode.jsonc"), join(TARGET, "opencode.jsonc"));
 cp(join(REPO, "AGENTS.md"), join(TARGET, "AGENTS.md"));
 cp(join(REPO, "config", "commands"), join(TARGET, "commands"));
 cp(join(REPO, "config", "plugins", "opencode-review"), join(TARGET, "plugins", "opencode-review"));
+// Copy .env.example as a starter template only — never overwrite an existing
+// (possibly filled-in) .env.example in TARGET.
+const envExampleDest = join(TARGET, ".env.example");
+if (!existsSync(envExampleDest)) {
+  cp(join(REPO, "config", ".env.example"), envExampleDest);
+} else {
+  log(`  skip ${envExampleDest} (already exists — not overwriting filled template)`);
+}
 
 log("== 3/6 local plugin deps (opencode-review) ==");
 run("npm", ["install", "--prefix", join(TARGET, "plugins", "opencode-review"), "@opencode-ai/plugin"]);
@@ -88,6 +98,23 @@ for (const [repo, skills] of SKILLS) {
   for (const s of skills) args.push("-s", s);
   args.push("-a", "opencode", "-g", "-y");
   run("npx", args);
+}
+// Vendored local/workflow skills (skills/ in this repo) — cannot be installed
+// via `skills add`, copied verbatim. Overwrite is correct (versioned content,
+// unlike .env.example above).
+const VENDORED_SKILLS = ["architect", "audit", "check", "debug", "design-system", "develop", "document", "kodus-review", "living-docs", "opencode-github", "pr-agent", "scope", "ship", "sync", "test", "write-swift"];
+for (const name of VENDORED_SKILLS) {
+  const src = join(REPO, "skills", name);
+  const dest = join(SKILLS_DIR, name);
+  if (!existsSync(src)) {
+    log(`  skip skills/${name} (not in repo skills/)`);
+    continue;
+  }
+  log(`  copy skills/${name} -> ${dest}`);
+  if (!DRY) {
+    if (existsSync(dest)) rmSync(dest, { recursive: true, force: true });
+    cpSync(src, dest, { recursive: true });
+  }
 }
 
 log("== 5/6 CLIs ==");
@@ -119,9 +146,11 @@ log("== 6/6 manual steps (cannot be automated) ==");
 log(`
   1. Auth:  kodus auth login   (or export KODUS_TEAM_KEY)
             gh auth login
-  2. Env (see config/.env.example): CONTEXT7_API_KEY, SENTRY_ACCESS_TOKEN,
-     GOOGLE_APPLICATION_CREDENTIALS, GOOGLE_PROJECT_ID, DATABASE_URL,
-     MDB_MCP_CONNECTION_STRING, REDIS_URL
+  2. Env (copy config/.env.example to .env in the opencode config dir, then fill values):
+      CONTEXT7_API_KEY, SENTRY_ACCESS_TOKEN,
+      GOOGLE_APPLICATION_CREDENTIALS, GOOGLE_PROJECT_ID, DATABASE_URL,
+      MDB_MCP_CONNECTION_STRING, REDIS_URL, OPENCODE_ZEN_API_KEY,
+      KODUS_TEAM_KEY (or: kodus auth login)
   3. Cluster: configure kubeconfig for the kubernetes MCP.
   4. Restart opencode (config is loaded once at startup).
   5. Per repo: run /pr-agent-setup once (adds PR-Agent Action; set OPENAI_KEY secret).

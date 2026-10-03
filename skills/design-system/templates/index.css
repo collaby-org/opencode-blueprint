@@ -1,0 +1,34 @@
+/* Tokens index (SOURCE — never @imported across package boundaries).
+   Each app materializes its own copy into its own styles location.
+   Replace PREFIX with the repo's own token prefix. */
+
+:root {
+  /* Colors (semantic roles, light mode defaults) */
+  --PREFIX-bg-primary: TBD;
+  --PREFIX-bg-surface: TBD;
+  --PREFIX-text-primary: TBD;
+  --PREFIX-text-muted: TBD;
+  --PREFIX-accent: TBD;
+  --PREFIX-border: TBD;
+
+  /* Typography */
+  --PREFIX-font-sans: TBD;
+  --PREFIX-text-sm: TBD;
+  --PREFIX-text-base: TBD;
+  --PREFIX-text-lg: TBD;
+
+  /* Spacing / radius / shadow / motion */
+  --PREFIX-space-1: TBD;
+  --PREFIX-space-2: TBD;
+  --PREFIX-space-4: TBD;
+  --PREFIX-radius-sm: TBD;
+  --PREFIX-radius-md: TBD;
+  --PREFIX-shadow-sm: TBD;
+  --PREFIX-motion-fast: TBD;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Dark-mode overrides for every color role above */
+  }
+}

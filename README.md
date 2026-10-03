@@ -1,7 +1,7 @@
 # OpenCode Blueprint
 
 > One command. A complete, opinionated, production-grade [opencode](https://opencode.ai)
-> environment — **21 MCPs, 10 plugins, 44 skills, a global agent workflow,**
+> environment — **21 MCPs, 10 plugins, 88 skills, a global agent workflow,**
 > and **Kodus + PR-Agent** review loops. Built for teams shipping
 > Apple-clean, award-worthy software.
 
@@ -54,7 +54,7 @@ finished answer — researched, de-duplicated, and verified working together:
 | `opencode-log-sanitizer` | JWT/bcrypt/base64 redacted before the model sees them |
 | `opencode-command-inject` | `package.json` scripts + Makefiles become `/` commands |
 
-### Skills (44) — stack knowledge
+### Skills (88) — stack knowledge
 
 | Stack | Skills |
 |---|---|
@@ -65,13 +65,28 @@ finished answer — researched, de-duplicated, and verified working together:
 | Tauri desktop | `tauri-v2` |
 | Design (all S-rank) | `apple-design`, `animate`, `animate-expo`, `animation-vocabulary`, `emil-design-eng`, `review-animations`, `improve-animations`, `find-animation-opportunities`, `pick-ui-library`, `prototype`, `design-taste-frontend`, `impeccable`, `shadcn` |
 | Workflow | `new-feature`, `code-structure`, `evidence-driven-testing`, `before-and-after`, `unslop`, `perf-debug`, `excalidraw-diagram` |
+| API design / contract | `api-designer`, `graphql-architect` |
+| Realtime / sockets | `websocket-engineer` |
+| JS/TS | `javascript-pro`, `typescript-pro` |
+| E2E / browser testing | `playwright-expert` |
+| Security review / hardening | `secure-code-guardian`, `security-reviewer` |
+| Legacy modernization | `legacy-modernizer` |
+| Adversarial review | `the-fool` |
+| NestJS deep work | `nestjs-expert` |
+| Next.js deep work | `nextjs-developer` |
+| React UI logic | `react-expert` |
+| Postgres tuning | `postgres-pro`, `database-optimizer` |
+| DevOps / pipeline | `devops-engineer` |
+| Test strategy / suite | `test-master` |
+| Gate inputs (commands own the gate) | `architecture-designer` → `/architect`, `feature-forge` → `/scope`, `spec-miner` → `/audit`, `debugging-wizard` → `/debug`, `code-reviewer` → review, `code-documenter` → `/document`, `fullstack-guardian` |
+| Later (surface-gated) | `kubernetes-specialist`, `terraform-engineer`, `microservices-architect`, `mcp-developer`, `monitoring-expert` |
 
 ### The workflow (`AGENTS.md`, installed globally)
 
-1. **Isolate** — fresh worktree per feature (established projects; skipped for new apps and migrations).
-2. **Build** — service-layer architecture, stack skills loaded per target, reusable shadcn components, Lucide icons only.
-3. **Prove** — runtime evidence (before/after), then the **Kodus loop** until zero high/critical issues.
-4. **Ship** — PR with evidence, `/unslop` prose, **PR-Agent + Kodus at zero**, present the URL.
+1. **Isolate** — fresh worktree per feature (established projects; skipped for new apps/migrations); `/scope` first for new builds/migrations, `/audit` human-only when context stale.
+2. **Build** — `/develop` (+ `code-structure` + stack skills, `design-system` for UI); → `/architect` spec when a decision is owed; `/debug` anytime.
+3. **Prove** — runtime evidence (before/after) + `/check verify` vs spec, `/test` owns the suite; then the **Kodus loop** to clean.
+4. **Ship** — `/check review`, PR with evidence, `/document`, `/unslop` prose, **PR-Agent + Kodus at zero** (`/sync` human-only, never auto-chained).
 
 Design bar: Apple-clean, invisible motion (`transform`/`opacity`, <300ms,
 springs, reduced-motion honored), full UI states, dark mode from day one.
@@ -84,7 +99,7 @@ npx opencode-blueprint
 
 The installer: checks prerequisites → backs up your existing config →
 copies `opencode.jsonc` + `AGENTS.md` + commands → installs the local
-plugin's deps → installs all 44 skills globally → installs the Kodus CLI
+plugin's deps → installs all 88 skills globally → installs the Kodus CLI
 and `redis-mcp-server` → prints your personal checklist.
 
 Then:

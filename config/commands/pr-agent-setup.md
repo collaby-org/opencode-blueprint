@@ -7,12 +7,14 @@ Set up PR-Agent automated PR reviews in the current project
 
 0. Check `gh auth status`. If not authenticated, stop and tell the user to
    run `gh auth login` first.
-1. Ask the user ONCE (single round, all questions together):
-   a. LLM base URL — default `https://api.openai.com/v1` (official OpenAI).
-      Custom OpenAI-compatible endpoints welcome, but must be PUBLICLY
-      reachable (GitHub runners can't see localhost).
-   b. Exact API model ID — default `gpt-4o`. Must be the endpoint's real
-      model string, not a display name.
+1. Ask the user ONCE (single round, all questions together).
+   Defaults in brackets — accept on empty reply:
+   a. LLM base URL [default `https://tokenharbor.ai/v1`]. Must be an
+      OpenAI-compatible **chat-completions** endpoint, PUBLICLY reachable
+      (GitHub runners can't see localhost). NOTE: Zen serves Muse Spark
+      via `/responses`, not chat-completions — for PR-Agent use Token
+      Harbor (or any chat-completions gateway), not Zen directly.
+   b. Exact API model ID [default `muse-spark-1-3`].
    c. The API key value itself (you will pipe it straight into
       `gh secret set` — never write it to any file, never echo it back).
    d. Secret scope: this repo only, or org-wide (`--org`)?

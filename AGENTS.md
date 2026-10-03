@@ -12,54 +12,75 @@ invariants into the repo's own `AGENTS.md`; this file governs everywhere.
    starts in a fresh Git worktree branched from `origin/main` so agents work
    in parallel without conflicts. Never build on `main`. Skip this for new
    apps (no branches needed) and for platform/technology migrations.
+   New builds and migrations start at `/scope` first — new build →
+   `/scope` then `/new-feature` worktree following the scope plan;
+   migration → `/scope` then follow the scope plan. `/scope` seeds WHAT,
+   not HOW. When project context is missing or stale, run `/audit` first
+   (ties to the Global AGENTS.md check) to bootstrap/fill `AGENTS.md`
+   before planning.
+   `/audit` is HUMAN-ONLY: agents must NEVER invoke
+   `/audit` on their own — only when the user explicitly authorizes it in
+   that same task. Never auto-chained, never assumed — ask first.
 2. **Build — `code-structure` + stack skills.** Actions/boundaries own the
    why/when, a service layer owns the reusable how (explicit inputs,
    structured returns). Load the stack skills for the target (see
    [Skill routing](#skill-routing)). Reusable components always — check
    existing code and the shadcn registry before writing new UI.
+   `/develop` is the build step here, alongside `code-structure` + stack
+   skills. Any load-bearing decision unmade → `/architect` first: build the
+   spec in `docs/specs/` before code (`/develop` gates to `/architect`
+   when a decision is owed, otherwise builds from spec + `AGENTS.md`).
+   At the start of any UI work, load the `design-system` skill (full rule
+   in [Design system](#design-system-always)). `/debug` anytime — failing
+   test, failing `/check verify`, wrong behavior; minimal fix, hands the
+   regression test to `/test`.
 3. **Prove — `evidence-driven-testing`.** Repo checks plus runtime evidence.
    Capture **before** while reproducing (cheapest moment), **after** once it
    works. UI proof via `before-and-after`; numbers/output pairs otherwise.
    Then the **Kodus loop** (see below) — nothing commits until it is clean.
+   `/check verify` drives the real app against the spec here, alongside
+   `evidence-driven-testing` and `before-and-after` evidence. `/test` runs
+   after implementing or changing code and owns the suite for uncommitted
+   changes.
 4. **Ship — proof, polish, review.** PR body carries before/after evidence,
    `/unslop` cleans all human-read text, `opencode-review` (`/review`)
    auto-fixes code findings, PR-Agent (`/pr-agent`) and Kodus review comments
    go to zero. Present the PR URL. Do not merge unless told to. Keep the
    worktree until merge/close. Every repo gets the PR-Agent Action once via
    `/pr-agent-setup` (see [PR-Agent preset](#pr-agent-preset)).
+   `/check review` runs here — fresh-model review after verify, before PR
+   prose. `/document` drafts PR text / changelog / release-note / postmortem
+   from the real diff after the change is green (runs after the living-docs
+   update so prose reflects final docs). `/sync` is HUMAN-ONLY: agents must
+   NEVER invoke `/sync` on their own — only when the user explicitly
+   authorizes it in that same task. It is the user's personal reconciliation
+   step, never auto-chained after `/document` or merge.
 
-## Kodus loop
+## Global AGENTS.md (always)
 
-After implementing, before committing — every time:
+The repo's `AGENTS.md` must always match the global one
+(`~/.config/opencode/AGENTS.md`, sourced from this blueprint).
 
-1. Run `kodus review --prompt-only` (or `/kodus-review`).
-2. Analyse every finding.
-3. Fix all valid findings.
-4. Run the repo's tests.
-5. Re-run the review. Repeat until no high/critical issues remain
-   (`--fail-on error` exits 0).
-6. Only then commit/push.
+- **Check first.** At the start of every task, check the repo has `AGENTS.md`.
+- **Copy if missing.** If it does not exist, copy the global file in as-is —
+  only with the user's explicit authorization in that same task. Ask first,
+  never copy on its own.
+- **Replace if different.** If it exists, compare it with the global file —
+  if not identical, replace it with the global version only with the user's
+  explicit authorization in that same task. Ask first, never replace on its
+  own. Never leave a diverged `AGENTS.md` behind.
+- **Bar.** AGENTS.md must never be edited by AI without user consent.
 
-Requires the Kodus CLI (`npm install -g @kodus/cli`) and auth
-(`kodus auth login` or `KODUS_TEAM_KEY` env with a team key from
-app.kodus.io/organization/cli-keys). Skipped only when the CLI is missing
-— then say so and continue without it, never fake the review.
+## Living docs (always)
 
-Two backends (default is Cloud):
-
-- **Cloud (default):** CLI talks to `api.kodus.io`; models are chosen in
-  the Kodus dashboard.
-- **Self-hosted local orchestrator** (`kodustech/kodus-ai` via Docker):
-  point the CLI at it with `KODUS_API_URL=http://localhost:3001`, and give
-  the backend its model via `.env`:
-  `API_OPEN_AI_API_KEY=<key>` + `API_OPENAI_FORCE_BASE_URL=<public or
-  `host.docker.internal` URL — containers can't see host `localhost`> +
-  `API_LLM_PROVIDER_MODEL=<exact model id>`.
-  Warnings: needs Docker + pnpm; grabs ports 3000/3001/5432/27017/5672
-  (collide with local dev databases — remap or stop them first);
-  anonymous telemetry heartbeat is on unless
-  `KODUS_TELEMETRY_DISABLED=true`; local quickstart is dev-mode, production
-  follows the generic-vm guide.
+Every repo carries living docs in `docs/` — `changelog.md`,
+`system_diagram.md`, `targets.md`, `roadmap.md`, `tech_stack.md`,
+`project-doc.md`. Root `docs/` for single-repo; per-app `docs/` in
+monorepo (e.g. `docs/` + `apps/frontend/docs/`, layout follows repo shape).
+New project: create + fill as you go. Existing with files: read all before
+planning. Existing without: implement from codebase analysis, never guess.
+Full protocol lives in the `living-docs` skill — load it whenever touching
+living docs. Stale docs are a bug.
 
 ## Skill routing
 
@@ -80,62 +101,49 @@ Load the skills matching the target. Nothing else.
 | Diagrams / architecture | `excalidraw-diagram` |
 | Slow screen / perf issue | `perf-debug` |
 | New DB, console, API keys | `prisma-postgres-setup`, `prisma-postgres` |
+| API design / contract | `api-designer`, `graphql-architect` |
+| Realtime / sockets | `websocket-engineer` |
+| JS/TS code | `javascript-pro`, `typescript-pro` |
+| E2E / browser testing | `playwright-expert` |
+| Security review / hardening | `secure-code-guardian`, `security-reviewer` (→ Kodus gate) |
+| Legacy modernization | `legacy-modernizer` |
+| Adversarial review | `the-fool` |
+| NestJS deep work | `nestjs-expert` (+ `nestjs-best-practices`) |
+| Next.js deep work | `nextjs-developer` (+ `nextjs-best-practices`) |
+| React UI logic | `react-expert` |
+| Postgres / query tuning | `postgres-pro`, `database-optimizer` |
+| DevOps / pipeline | `devops-engineer` |
+| Test strategy / suite | `test-master` (→ `/test`) |
+| Architecture input (ours own the gate) | `architecture-designer` (→ `/architect`) |
+| Feature shaping input (ours own the gate) | `feature-forge` (→ `/scope`) |
+| Spec mining input (ours own the gate) | `spec-miner` (→ `/audit`, human-only) |
+| Debug / failure triage | `debugging-wizard` (→ `/debug`) |
+| Code review | `code-reviewer` (→ `kodus-review` / `/review`) |
+| Docs from diff | `code-documenter` (→ `/document` + living-docs) |
+| Full-stack guardrail | `fullstack-guardian` |
+| Later, not day-one (only with that surface) | `kubernetes-specialist`, `terraform-engineer`, `microservices-architect`, `mcp-developer`, `monitoring-expert` |
+
+Bar: match the skill to the repo's ACTUAL pinned versions in `tech_stack.md` — never apply latest idioms to legacy code (adapt down or ask).
+
+Ours own the gates (`architecture-designer`→`/architect`, `feature-forge`→`/scope`, `spec-miner`→`/audit`, `debugging-wizard`→`/debug`, `test-master`→`/test`, `code-reviewer`→`kodus-review`/`/review`, `security-reviewer`→Kodus gate, `code-documenter`→`/document` + living-docs) — their content is input/checklist only. Later group: load only when the repo actually has that surface.
 
 ## UI rules (always)
 
-- **Icons: Lucide only.** Static: `lucide-react`. Animated: lucide-animated
-  via shadcn registry —
-  `npx shadcn@latest add "https://lucide-animated.com/r/<icon>.json"`
-  (kebab-case, drops into `components/icons/`). Browse via the
-  `lucide-animated` MCP (`search_icons`, `get_icon`) or
-  https://lucide-animated.com/icons/llms.txt. Never hand-roll SVGs, never
-  emoji, one icon family per project.
-- **Components: shadcn first.** Compose existing components and variants
-  (`npx shadcn@latest search` before building custom). Magic UI and
-  Aceternity UI are allowed — both are shadcn-compatible registries. Never
-  ship default-state shadcn; theme with semantic tokens, no raw colors,
-  no `space-x/y` (use `gap`), `size-*` for squares.
-- **Motion is invisible or it ships without.** Animate `transform` and
-  `opacity` only, UI stays under 300ms, ease-out for enter, custom curves,
-  springs for gestures, `prefers-reduced-motion` honored. Purpose every
-  animation or drop it. Match motion to mood (crisp dashboard, playful
-  marketing).
-- **Bar:** Apple-clean, user-first, every button and step feels inevitable.
-  Full UI states (loading skeletons matching layout, empty, error, active
-  press feedback), WCAG AA contrast, dark mode from the start, hero fits
-  viewport, one accent color, one radius scale, mobile collapse explicit.
+Icons Lucide-only; components shadcn-first; motion invisible-or-not;
+Apple-clean bar. Full standards live in the `design-system` skill —
+read `reference/master-instructions.md` before styling anything.
 
 ## Design system (always)
 
-Every codebase with UI must carry a `/design-system` folder. Adapt its
-contents to the stack in `tech_stack.md` — the shape below assumes
-Next.js + Tailwind + shadcn; an Expo app gets native tokens/components
-instead. Never force the example onto a mismatched stack.
-
-- **Check first.** At the start of every UI task, check `/design-system`
-  exists and read `DESIGN_SYSTEM.md` + the `ai/` registry before designing.
-- **Create if missing — ask first.** If absent, ask the user which source
-  to build from: analyse the existing codebase, images / links / live
-  previews they provide, or both — then create it. Be very, very accurate
-  to the chosen source.
-- **Follow it.** New components must reuse existing ones, use design tokens
-  exclusively (semantic tokens per UI rules — never raw colors or hardcoded
-  palettes), and load the task-matching skills from Skill routing
-  (`shadcn`, `apple-design`, `animate`, `impeccable`, …).
-- **Shape (adapt per stack):** `README.md`, `DESIGN_SYSTEM.md`,
-  `tokens/` (colors, typography, spacing, radius, shadows, motion + index),
-  `components/<Name>/` (component, types, stories, docs, index),
-  `patterns/` (forms, dashboards, navigation, tables, empty-states,
-  responsive-layouts), `pages/`, `ai/` (`RULES.md`, `COMPONENT_MAP.json`,
-  `DESIGN_TOKENS.json`, `PAGE_PATTERNS.json`, `VALIDATION.md`),
-  `components.json`.
-- **Build protocol.** Inspect the page → search the registry → reuse
-  components → apply page patterns → tokens only → responsive check →
-  validate → fix → re-validate. Do not create a new component unless
-  necessary; when one is, document it, register it, add stories + tests.
-- **Document composition, not just components** (page → sections →
-  components with assembly rules), give real examples, and keep validation
-  deterministic — never make the AI decide what the system already defines.
+Every codebase with UI carries a `design-system/` folder (single-repo at
+root; monorepo root shared plus per-app, following repo shape).
+At the start of every UI task, check it exists and read `DESIGN_SYSTEM.md`
++ the `ai/` registry before designing — then follow the `design-system`
+skill: existing non-empty system → ADOPT (follow, extend, never replace);
+missing or empty → GENERATE (ask intent first, scaffold from it, TBD over
+invention). Tokens → primitives → components → patterns → pages. Never
+`@import` design-system CSS across package boundaries — each app
+materializes its own copy. Stale system docs are a bug.
 
 ## Data & backend rules
 
@@ -145,27 +153,6 @@ instead. Never force the example onto a mismatched stack.
 - Parameterized queries always. No destructive SQL without confirmation.
 - `.env*` is blocked by `envsitter-guard` — use its tools, never paste
   secrets. Pasted logs are auto-sanitized (JWT/bcrypt/base64 redacted).
-
-## PR-Agent preset
-
-PR-Agent (Qodo community edition) reviews every PR automatically once the
-repo carries `.github/workflows/pr-agent.yml` + `.pr_agent.toml`.
-
-- New repo? Run `/pr-agent-setup` first: it asks for the LLM base URL +
-  exact model ID + key, scaffolds both files, and stores the key as
-  `LLM_API_BASE` / `LLM_API_KEY` GitHub secrets (repo or org scope).
-  Secrets are secret-references only — the key NEVER lands in a file.
-  The endpoint must be publicly reachable (GitHub runners can't see
-  localhost); default is official OpenAI.
-- Every PR: `/pr-agent <url-or-number>` — post `/review`, fix actionable
-  findings, re-trigger until clean. `/improve` and `/ask` available as PR
-  comments for targeted help.
-- You can also comment directly on the PR: `/review`, `/improve`, or
-  `/ask <question>` (e.g. `/ask Could this introduce a race condition?`).
-  PR-Agent answers in GitHub comments; fold its findings into the same
-  fix loop.
-- PR-Agent findings and Kodus comments share one bar: zero unresolved
-  before presenting the PR URL.
 
 ## Multi-agent rules
 
@@ -180,51 +167,48 @@ repo carries `.github/workflows/pr-agent.yml` + `.pr_agent.toml`.
   re-derive decided conventions. Costs roll into `opencode-telemetry`.
 - Conflicts you can't resolve confidently: stop and report.
 
-## Global AGENTS.md (always)
+## Kodus loop (always)
 
-The repo's `AGENTS.md` must always match the global one
-(`~/.config/opencode/AGENTS.md`, sourced from this blueprint).
+After implementing, before committing — every time, load the
+`kodus-review` skill and run its loop: review → analyse → fix valid →
+tests → re-run until `--fail-on error` exits 0 (local-first: stage first,
+`--staged` review of a tiny diff). Full protocol (backends, auth, CLI-missing
+fallback) lives in the skill. Bar: nothing commits until clean — CLI missing
+→ say so, never fake the review.
 
-- **Check first.** At the start of every task, check the repo has `AGENTS.md`.
-- **Copy if missing.** If it does not exist, copy the global file in as-is.
-- **Replace if different.** If it exists, compare it with the global file —
-  if not identical, replace it with the global version. Never leave a
-  diverged `AGENTS.md` behind.
+## PR-Agent preset (always)
 
-## Living docs (always)
+PR-Agent reviews every PR once the repo carries the preset pair — load the
+`pr-agent` skill per PR: `/review` → fix actionable findings → re-trigger
+until clean (`/improve`, `/ask` as needed; bootstrap via `/pr-agent-setup`
+on new repos). Full protocol lives in the skill. Bar: PR-Agent + Kodus
+comments to zero before presenting the PR URL.
 
-Every repo must carry these five files at its root (or per app, if monorepo):
-`changelog.md`, `system_diagram.md`, `targets.md`, `roadmap.md`, `tech_stack.md`.
+## opencode GitHub integration (always)
 
-- **Check first.** At the start of every task, check whether each file exists
-  and read every one that does — before planning, not after.
-- **Create if missing.** If any file is absent, create it by analysing the
-  actual codebase (code, configs, manifests, migrations — never guess).
-  Be very, very accurate: every entry must reflect what is really there.
-- **Update after each task.** After every individual task, update all five:
-  what changed, what is now true, what is next. Keep them tight, clean,
-  and very accurate — short factual lines, no filler, no aspirational claims.
-  Stale docs are a bug: never leave them behind the code.
-- **Contents:** `changelog.md` = dated entries per change (with app scope in
-  multi-app repos); `system_diagram.md` = real architecture and data flow
-  (mermaid ok); `targets.md` = current acceptance criteria and their status;
-  `roadmap.md` = sequenced next steps, checked off as done; `tech_stack.md` =
-  actual runtimes, frameworks, DBs, and versions in use.
-- **Versions.** Bump the app version when the change warrants it (fix →
-  patch `0.1.0` to `0.1.1`, feature → minor, breaking → major). In a
-  multi-app codebase (e.g. 3 apps), version and changelog each app
-  independently — bump only the app(s) that changed, when you judge it is
-  time, and record the bump in that app's `changelog.md`.
+opencode runs in GitHub Actions (`opencode.json` at root + `.github/workflows/`
+set) — load the `opencode-github` skill when wiring or invoking it (`/oc`
+mentions, auto review, triage, scheduled checks; new-repo bootstrap file set).
+Full protocol (workflows, triggers, model lineup + fallback pattern) lives in
+the skill. Bar: secrets by reference only — never a literal key value in any file.
 
 ## Completing a task
 
-1. Stay scoped to the task. Small Ralph loops (`/ralph-loop`) for
-   well-defined, verifiable work.
-2. Run the repo's checks.
-3. Before/after evidence assembled.
-4. Kodus loop to clean (no high/critical), then commit (conventional
-   commits — feeds the release plugin), rebase on `origin/main`, rerun
-   checks.
-5. Push, open PR: what changed, how tested (every claim evidenced),
-   before/after proof, risks/follow-ups. `/unslop` on title + body.
+Load the `ship` skill at the end of every task — the full end-of-task protocol lives there.
+
+1. Stay scoped to the task; gates in run order: `/scope` → `/audit` → `/architect` spec → `/develop` (small `/ralph-loop` slices).
+   `/audit` is
+   HUMAN-ONLY: agents must NEVER invoke `/audit` on their own — only when
+   the user explicitly authorizes it in that same task. Never auto-chained,
+   never assumed — ask first.
+2. Run the repo's checks (`/test` owns the suite; `/debug` on failure, regression test to `/test`).
+3. Assemble before/after evidence (`/check verify` against the spec; UI via `before-and-after`).
+4. Kodus loop to clean, commit (conventional commits), rebase on `origin/main`, rerun checks.
+5. Push, open PR (`/check review`, then `/document`; `/unslop` on title + body).
 6. `/review` + `/pr-agent` + Kodus to zero comments. Present the PR URL.
+7. `/sync` is HUMAN-ONLY — agents must NEVER invoke it on their own, only
+   when the user explicitly authorizes it in that same task. Never
+   auto-chain it after `/document` or merge.
+   One lock covers `/sync`,
+   `/audit`, and any other skill that edits `AGENTS.md`: never without
+   explicit user authorization in that same task, never auto-chained.
