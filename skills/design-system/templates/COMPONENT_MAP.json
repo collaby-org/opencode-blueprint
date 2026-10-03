@@ -1,0 +1,12 @@
+{
+  "components": [
+    {
+      "name": "Example",
+      "path": "components/Example/",
+      "variants": ["default"],
+      "states": ["default", "hover", "focus", "disabled", "loading"],
+      "docs": "components/Example/README.md",
+      "stories": "components/Example/Example.stories.tsx"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "pages": [
+    {
+      "name": "ExamplePage",
+      "route": "/example",
+      "sections": [
+        { "name": "Header", "components": ["AppHeader"] },
+        { "name": "Main", "components": ["TBD"] }
+      ],
+      "patterns": ["TBD"],
+      "responsive": "TBD (mobile collapse behavior)"
+    }
+  ]
+}
