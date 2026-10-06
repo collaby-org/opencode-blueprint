@@ -1,0 +1,9 @@
+{
+  "name": "envsitter-guard-local",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@opencode/plugin": "^2.0.22",
+    "envsitter": "^0.0.4"
+  }
+}

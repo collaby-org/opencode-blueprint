@@ -39,19 +39,25 @@ finished answer — researched, de-duplicated, and verified working together:
 | Cloud & infra | `gcp-bigquery`, `gcp-compute`, `gcp-gke`, `gcp-run`, `gcp-storage`, `cloudflare`, `kubernetes` |
 | Payments & analytics | `stripe`, `google-analytics` |
 
-### Plugins (4) — runtime superpowers
+### Plugins (10) — runtime superpowers
 
 | Plugin | Job |
 |---|---|
 | `oh-my-opencode-slim` | 7-agent orchestration (the one orchestrator — swarm/micode/OAC intentionally excluded) |
 | `opencode-mem` | Automatic long-term memory with vector recall |
-| `@tarquinen/opencode-dcp` | Context pruning (pairs with memory, not against it) |
+| `opencode-dcp` (local vendored copy) | Context pruning (pairs with memory, not against it) — vendored from `@tarquinen/opencode-dcp@3.2.0` with the visible `<dcp-system-reminder>` leak fixed locally, pending upstream [#608](https://github.com/Opencode-DCP/opencode-dynamic-context-pruning/issues/608) |
 | `opencode-review` | Auto code-review on idle + `/review` + auto-fix (local install — not on npm) |
+| `opencode-telemetry` (local port) | Local cost/usage telemetry — `/telemetry-report` + `/telemetry-inspect` (no sqlite, no npm) |
+| `opencode-ralph-wiggum` (local port) | Iterative dev loops — `/ralph-loop`, `/ralph-continue`, `/cancel-ralph` (no npm) |
+| `opencode-github-release` (local port) | Semantic-version GitHub releases — bump suggestion + tag/publish (no npm) |
+| `envsitter-guard` (local port) | Safe `.env` inspection/mutation that never prints secrets; blocks direct `.env` reads (no npm) |
+| `opencode-log-sanitizer` (local port) | Redacts secrets at the prompt/context boundary before they reach the model (no npm) |
+| `opencode-command-inject` (local port) | Auto-discovers project commands (Makefile/npm/skills) — `/project-commands` (no npm) |
 
-> Removed 2026-10-06 until upstream migrates to the v2 `{ id, setup/effect }`
-> plugin definition: `opencode-telemetry`, `opencode-ralph-wiggum`
-> (`/ralph-loop`), `opencode-github-release`, `envsitter-guard` (`.env` guard),
-> `opencode-log-sanitizer`, `opencode-command-inject`.
+> Restored 2026-10-06 as local v2 ports (rows above): `opencode-telemetry`,
+> `opencode-ralph-wiggum` (`/ralph-loop`), `opencode-github-release`,
+> `envsitter-guard` (`.env` guard), `opencode-log-sanitizer`,
+> `opencode-command-inject`. Nothing from the npm set remains removed.
 
 ### Skills (88) — stack knowledge
 

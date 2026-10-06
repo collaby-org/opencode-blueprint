@@ -53,8 +53,10 @@
   },
   "plugin": [
     "opencode-mem",
-    "@tarquinen/opencode-dcp",
     "oh-my-opencode-slim"
+    // dcp is vendored locally at plugins/opencode-dcp (pending upstream #608
+    // visible-tag fix) — path plugins auto-load, so no npm entry here;
+    // leaving "@tarquinen/opencode-dcp" would double-load it.
     // Removed 2026-10-06: opencode-github-release, opencode-telemetry,
     // opencode-ralph-wiggum, envsitter-guard, opencode-log-sanitizer,
     // opencode-command-inject — all ship the old bare-function format (or no

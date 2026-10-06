@@ -79,6 +79,13 @@ cp(join(REPO, "config", "opencode.jsonc"), join(TARGET, "opencode.jsonc"));
 cp(join(REPO, "AGENTS.md"), join(TARGET, "AGENTS.md"));
 cp(join(REPO, "config", "commands"), join(TARGET, "commands"));
 cp(join(REPO, "config", "plugins", "opencode-review"), join(TARGET, "plugins", "opencode-review"));
+cp(join(REPO, "config", "plugins", "opencode-dcp"), join(TARGET, "plugins", "opencode-dcp"));
+cp(join(REPO, "config", "plugins", "opencode-github-release"), join(TARGET, "plugins", "opencode-github-release"));
+cp(join(REPO, "config", "plugins", "opencode-telemetry"), join(TARGET, "plugins", "opencode-telemetry"));
+cp(join(REPO, "config", "plugins", "envsitter-guard"), join(TARGET, "plugins", "envsitter-guard"));
+cp(join(REPO, "config", "plugins", "opencode-log-sanitizer"), join(TARGET, "plugins", "opencode-log-sanitizer"));
+cp(join(REPO, "config", "plugins", "opencode-command-inject"), join(TARGET, "plugins", "opencode-command-inject"));
+cp(join(REPO, "config", "plugins", "opencode-ralph-wiggum"), join(TARGET, "plugins", "opencode-ralph-wiggum"));
 // Copy .env.example as a starter template only — never overwrite an existing
 // (possibly filled-in) .env.example in TARGET.
 const envExampleDest = join(TARGET, ".env.example");
@@ -88,8 +95,18 @@ if (!existsSync(envExampleDest)) {
   log(`  skip ${envExampleDest} (already exists — not overwriting filled template)`);
 }
 
-log("== 3/6 local plugin deps (opencode-review) ==");
+log("== 3/6 local plugin deps (review, dcp + 6 ports) ==");
 run("npm", ["install", "--prefix", join(TARGET, "plugins", "opencode-review"), "@opencode-ai/plugin"]);
+// opencode-dcp is a vendored npm tree (deps pinned in its package.json):
+// production-only install. --legacy-peer-deps works around an upstream
+// dev-tree conflict (dev @opencode/plugin wants @opentui/core >=0.5.14
+// while the package pins ^0.4.5); --omit=dev keeps the 0.4.x runtime the
+// TUI entry was built against. No version upgrades beyond the pins.
+run("npm", ["install", "--prefix", join(TARGET, "plugins", "opencode-dcp"), "--omit=dev", "--legacy-peer-deps", "--no-audit", "--no-fund"]);
+// Ported plugins (deps pinned in each package.json) — same production flags.
+for (const name of ["opencode-github-release", "opencode-telemetry", "envsitter-guard", "opencode-log-sanitizer", "opencode-command-inject", "opencode-ralph-wiggum"]) {
+  run("npm", ["install", "--prefix", join(TARGET, "plugins", name), "--omit=dev", "--legacy-peer-deps", "--no-audit", "--no-fund"]);
+}
 
 log("== 4/6 skills (global, agent=opencode) ==");
 mkdirSync(SKILLS_DIR, { recursive: true });
