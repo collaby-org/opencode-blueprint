@@ -1,4 +1,4 @@
-import { Plugin } from "@opencode/plugin";
+import { define } from "@opencode-ai/plugin/v2/promise";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -128,7 +128,7 @@ function formatInspect(store: FileStore, sessionID: string): string {
   return lines.join("\n");
 }
 
-export default Plugin.define({
+export default define({
   id: "opencode-telemetry",
   async setup(ctx) {
     // NOTE (v1 -> v2): bun:sqlite replaced with JSON/JSONL files (store.ts);

@@ -1,4 +1,4 @@
-import { Plugin } from "@opencode/plugin";
+import { define } from "@opencode-ai/plugin/v2/promise";
 import {
   RalphStateManager,
   buildRalphStartResponse,
@@ -136,7 +136,7 @@ function parseLoopArgs(text: string): { prompt?: string; maxIterations?: number;
   return out;
 }
 
-export default Plugin.define({
+export default define({
   id: "opencode-ralph-wiggum",
   async setup(ctx) {
     // NOTE (v1 -> v2): v1 imported { tool } from "@opencode-ai/plugin" (the

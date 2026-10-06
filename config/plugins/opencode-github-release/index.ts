@@ -1,4 +1,4 @@
-import { Plugin } from "@opencode/plugin";
+import { define } from "@opencode-ai/plugin/v2/promise";
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { promisify } from "node:util";
@@ -67,7 +67,7 @@ async function logSince(tag: string, cwd: string): Promise<string> {
   }
 }
 
-export default Plugin.define({
+export default define({
   id: "opencode-github-release",
   async setup(ctx) {
     // NOTE (v1 -> v2): v1 used the `$` shell helper from PluginContext; v2

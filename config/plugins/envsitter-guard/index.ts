@@ -1,4 +1,4 @@
-import { Plugin } from "@opencode/plugin";
+import { define } from "@opencode-ai/plugin/v2/promise";
 import {
   EnvSitter,
   addEnvFileKey,
@@ -274,7 +274,7 @@ Add a comment above a key. Dry-run unless \`write: true\`.
 Returns: \`{ file, key, hasChanges, plan: { action: "inserted"|"updated"|"not_found" } }\`
 `;
 
-export default Plugin.define({
+export default define({
   id: "envsitter-guard",
   async setup(ctx) {
     // NOTE (v1 -> v2): v1 received { directory, worktree } from PluginContext;

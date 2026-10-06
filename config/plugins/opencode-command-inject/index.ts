@@ -1,4 +1,4 @@
-import { Plugin } from "@opencode/plugin";
+import { define } from "@opencode-ai/plugin/v2/promise";
 import {
   injectCommandArguments,
   loadCatalog,
@@ -34,7 +34,7 @@ function tryExpandPrompt(
   return null;
 }
 
-export default Plugin.define({
+export default define({
   id: "opencode-command-inject",
   async setup(ctx) {
     // NOTE (v1 -> v2): v1 mutated host config (`config` hook injecting

@@ -1,4 +1,4 @@
-import { Plugin } from "@opencode/plugin";
+import { define } from "@opencode-ai/plugin/v2/promise";
 import { appendFile, mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -71,7 +71,7 @@ function scrubSystem(
   return { changed, redactions };
 }
 
-export default Plugin.define({
+export default define({
   id: "opencode-log-sanitizer",
   async setup(ctx) {
     // NOTE (v1 -> v2): v1 mutated stored chat parts via the "chat.message"
