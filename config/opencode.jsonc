@@ -54,13 +54,12 @@
   "plugin": [
     "opencode-mem",
     "@tarquinen/opencode-dcp",
-    "oh-my-opencode-slim",
-    "opencode-github-release",
-    "opencode-telemetry",
-    "opencode-ralph-wiggum",
-    "envsitter-guard",
-    "opencode-log-sanitizer",
-    "opencode-command-inject"
+    "oh-my-opencode-slim"
+    // Removed 2026-10-06: opencode-github-release, opencode-telemetry,
+    // opencode-ralph-wiggum, envsitter-guard, opencode-log-sanitizer,
+    // opencode-command-inject — all ship the old bare-function format (or no
+    // default export) and the installed build rejects them. Re-add once
+    // upstream migrates to the v2 { id, setup/effect } definition.
   ],
   "mcp": {
     "notion": {

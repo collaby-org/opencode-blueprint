@@ -1,130 +1,69 @@
-import type { Plugin } from "@opencode-ai/plugin"
-import { loadConfig, getLang } from "./config.ts"
-import { buildAgentPrompt, buildFixerPrompt, buildTogglePrompt } from "./agent.ts"
-import { getDimensionPrompts } from "./dimensions/index.ts"
-import { reviewChanges, createToggleAutoReviewTool } from "./tools/index.ts"
+import { define } from "@opencode-ai/plugin/v2/promise";
+import { loadConfig, getLang } from "./config.ts";
+import { buildAgentPrompt, buildFixerPrompt, buildTogglePrompt } from "./agent.ts";
+import { getDimensionPrompts } from "./dimensions/index.ts";
 
-const opencodeReview: Plugin = async ({ project, client, $, directory, worktree }) => {
-  const config = await loadConfig(directory)
-  const agentPrompt = buildAgentPrompt(config)
-  const fixerPrompt = buildFixerPrompt(config)
-  const dimensionPrompts = getDimensionPrompts(config)
-  const lang = getLang(config)
+export default define({
+  id: "opencode-review",
+  setup: async (ctx) => {
+    // NOTE (v1 -> v2): PluginContext carries no project/client/$ — only
+    // `options` plus hook domains. loadConfig() needs a project directory,
+    // so fall back to the server working directory for the
+    // `<project>/.opencode/review.json` lookup (the global
+    // `~/.config/opencode/review.json` lookup is unaffected).
+    const config = await loadConfig(process.cwd());
+    const agentPrompt = buildAgentPrompt(config);
+    const fixerPrompt = buildFixerPrompt(config);
+    const dimensionPrompts = getDimensionPrompts(config);
+    const lang = getLang(config);
 
-  let autoEnabled = config.trigger.auto_on_idle
-  let lastAutoReviewTime = 0
+    await ctx.agent.transform((draft) => {
+      draft.update("review", (agent) => {
+        agent.mode = "primary";
+        agent.steps = 30;
+        agent.color = "accent";
+        agent.permissions = [
+          { action: "bash", resource: "git diff*", effect: "allow" },
+          { action: "bash", resource: "git log*", effect: "allow" },
+          { action: "bash", resource: "git show*", effect: "allow" },
+        ];
+      });
 
-  return {
-    config(openCodeConfig) {
-      openCodeConfig.agent ??= {}
-
-      openCodeConfig.agent["review"] = {
-        mode: "primary",
-        temperature: 0.1,
-        steps: 30,
-        color: "accent",
-        tools: {
-          write: false,
-          edit: false,
-          bash: false,
-          task: true,
-        },
-        permission: {
-          bash: {
-            "git diff*": "allow",
-            "git log*": "allow",
-            "git show*": "allow",
-          },
-        },
-      }
-
-      openCodeConfig.agent["review:fixer"] = {
-        mode: "subagent",
-        temperature: 0.2,
-        steps: 20,
-        tools: {
-          write: true,
-          edit: true,
-          bash: true,
-          read: true,
-          grep: true,
-          glob: true,
-        },
-        prompt: fixerPrompt,
-      }
+      draft.update("review:fixer", (agent) => {
+        agent.mode = "subagent";
+        agent.steps = 20;
+        agent.system = fixerPrompt;
+      });
 
       if (config.parallel) {
         for (const dim of dimensionPrompts) {
-          openCodeConfig.agent[dim.agentName] = {
-            mode: "subagent",
-            temperature: 0.1,
-            steps: 30,
-            tools: {
-              write: false,
-              edit: false,
-              bash: false,
-              task: false,
-            },
-            prompt: dim.prompt,
-          }
+          draft.update(dim.agentName, (agent) => {
+            agent.mode = "subagent";
+            agent.steps = 30;
+            agent.system = dim.prompt;
+          });
         }
       }
+    });
 
-      openCodeConfig.command ??= {}
-      openCodeConfig.command["review"] = {
-        agent: "review",
-        description: "Review code changes with structured feedback",
-        template: agentPrompt,
-      }
+    const toggleDescriptions = {
+      zh: "切换自动审查开关（on/off）",
+      en: "Toggle auto-review on/off",
+      tr: "Otomatik incelemeyi aç/kapat (on/off)",
+    };
 
-      const toggleDescriptions: Record<ReturnType<typeof getLang>, string> = {
-        zh: "切换自动审查开关（on/off）",
-        en: "Toggle auto-review on/off",
-        tr: "Otomatik incelemeyi aç/kapat (on/off)",
-      }
+    await ctx.command.transform((draft) => {
+      draft.update("review", (command) => {
+        command.agent = "review";
+        command.description = "Review code changes with structured feedback";
+        command.template = agentPrompt;
+      });
 
-      openCodeConfig.command["review:auto"] = {
-        agent: "review",
-        description: toggleDescriptions[lang],
-        template: buildTogglePrompt(config),
-      }
-    },
-
-    tool: {
-      review_changes: reviewChanges,
-      toggle_auto_review: createToggleAutoReviewTool(
-        () => autoEnabled,
-        (v) => { autoEnabled = v },
-      ),
-    },
-
-    event: async ({ event }) => {
-      if (event.type === "session.idle" && autoEnabled) {
-        const now = Date.now()
-        if (now - lastAutoReviewTime < config.trigger.cooldown_seconds * 1000) return
-        lastAutoReviewTime = now
-
-        const ev = event as any
-        const sessionID = ev.properties?.sessionID ?? ev.properties?.id ?? ev.id
-        if (!sessionID) return
-
-        try {
-          await client.session.promptAsync({
-            body: {
-              agent: "review",
-              parts: [
-                {
-                  type: "text",
-                  text: "Session completed. Running automatic code review on staged changes...",
-                },
-              ],
-            },
-            path: { id: sessionID },
-          })
-        } catch {}
-      }
-    },
-  }
-}
-
-export default opencodeReview
+      draft.update("review:auto", (command) => {
+        command.agent = "review";
+        command.description = toggleDescriptions[lang];
+        command.template = buildTogglePrompt(config);
+      });
+    });
+  },
+});

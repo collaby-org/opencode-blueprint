@@ -39,7 +39,7 @@ finished answer — researched, de-duplicated, and verified working together:
 | Cloud & infra | `gcp-bigquery`, `gcp-compute`, `gcp-gke`, `gcp-run`, `gcp-storage`, `cloudflare`, `kubernetes` |
 | Payments & analytics | `stripe`, `google-analytics` |
 
-### Plugins (10) — runtime superpowers
+### Plugins (4) — runtime superpowers
 
 | Plugin | Job |
 |---|---|
@@ -47,12 +47,11 @@ finished answer — researched, de-duplicated, and verified working together:
 | `opencode-mem` | Automatic long-term memory with vector recall |
 | `@tarquinen/opencode-dcp` | Context pruning (pairs with memory, not against it) |
 | `opencode-review` | Auto code-review on idle + `/review` + auto-fix (local install — not on npm) |
-| `opencode-telemetry` | Passive cost/token forensics in local SQLite |
-| `opencode-ralph-wiggum` | Self-correcting Ralph loops (`/ralph-loop`) |
-| `opencode-github-release` | Semver tags + `gh` releases |
-| `envsitter-guard` | `.env` reads blocked, safe key inspection instead |
-| `opencode-log-sanitizer` | JWT/bcrypt/base64 redacted before the model sees them |
-| `opencode-command-inject` | `package.json` scripts + Makefiles become `/` commands |
+
+> Removed 2026-10-06 until upstream migrates to the v2 `{ id, setup/effect }`
+> plugin definition: `opencode-telemetry`, `opencode-ralph-wiggum`
+> (`/ralph-loop`), `opencode-github-release`, `envsitter-guard` (`.env` guard),
+> `opencode-log-sanitizer`, `opencode-command-inject`.
 
 ### Skills (88) — stack knowledge
 
