@@ -52,17 +52,22 @@ export default define({
       tr: "Otomatik incelemeyi aç/kapat (on/off)",
     };
 
-    await ctx.command.transform((draft) => {
-      draft.update("review", (command) => {
-        command.agent = "review";
-        command.description = "Review code changes with structured feedback";
-        command.template = agentPrompt;
+    // NOTE (runtime): the host command draft is add-only (no `update` —
+    // calling draft.update throws "draft.update is not a function" and gets
+    // the plugin disabled). Register owned commands via editor.add instead.
+    await ctx.command.transform((editor) => {
+      editor.add({
+        name: "review",
+        description: "Review code changes with structured feedback",
+        agent: "review",
+        template: agentPrompt,
       });
 
-      draft.update("review:auto", (command) => {
-        command.agent = "review";
-        command.description = toggleDescriptions[lang];
-        command.template = buildTogglePrompt(config);
+      editor.add({
+        name: "review:auto",
+        description: toggleDescriptions[lang],
+        agent: "review",
+        template: buildTogglePrompt(config),
       });
     });
   },
