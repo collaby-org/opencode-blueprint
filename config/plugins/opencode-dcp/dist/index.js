@@ -5567,10 +5567,7 @@ var createSyntheticTextPart = (baseMessage, content, stableSeed) => {
     messageID: userInfo.id,
     type: "text",
     text: content,
-    // Local fix for upstream #608: mark DCP-injected parts non-renderable,
-    // mirroring opencode-mem's hidden injections ({ type: "text", text,
-    // synthetic: true }).
-    synthetic: true
+    // NOTE (reverted): no `synthetic: true` — see lib/messages/utils.ts.
   };
 };
 var appendToLastTextPart = (message, injection) => {
