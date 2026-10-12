@@ -107,6 +107,20 @@ run("npm", ["install", "--prefix", join(TARGET, "plugins", "opencode-dcp"), "--o
 for (const name of ["opencode-github-release", "opencode-telemetry", "envsitter-guard", "opencode-log-sanitizer", "opencode-command-inject", "opencode-ralph-wiggum"]) {
   run("npm", ["install", "--prefix", join(TARGET, "plugins", name), "--omit=dev", "--legacy-peer-deps", "--no-audit", "--no-fund"]);
 }
+// Central fallback dep: the Bun loader walks bare imports up to
+// TARGET/node_modules, so the central copy must expose ./v2/promise
+// (>=1.18.29). Merge into TARGET/package.json (never overwrite other keys),
+// then install. Without this, path plugins fall back to a stale central
+// copy and fail with "Cannot find package".
+const centralPkgPath = join(TARGET, "package.json");
+let centralPkg = {};
+if (existsSync(centralPkgPath)) {
+  centralPkg = JSON.parse(readFileSync(centralPkgPath, "utf8"));
+}
+centralPkg.dependencies = { ...(centralPkg.dependencies || {}), "@opencode-ai/plugin": "^1.18.32" };
+if (!DRY) writeFileSync(centralPkgPath, JSON.stringify(centralPkg, null, 2) + "\n");
+else log(`  write ${centralPkgPath} (merge @opencode-ai/plugin into dependencies)`);
+run("npm", ["install", "--prefix", TARGET, "--no-audit", "--no-fund"]);
 
 log("== 4/6 skills (global, agent=opencode) ==");
 mkdirSync(SKILLS_DIR, { recursive: true });
