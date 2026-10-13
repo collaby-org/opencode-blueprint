@@ -130,6 +130,19 @@ Then:
 
 Preview first: `npx opencode-blueprint --dry-run`.
 
+## Windows GUI installer
+
+Prefer Next-Next-Finish over a terminal? `installer/` holds an Inno Setup
+script that wraps the same setup (`node installer/build.mjs` compiles it;
+needs [Inno Setup 6](https://jrsoftware.org/isdl.php), `ISCC` env var
+overrides the compiler path). It backs up existing config, deploys files
+without ever uninstalling your live config, runs the pinned
+`npx opencode-blueprint@<version>` for deps/skills/CLIs, and ends on a
+checklist page. Unsigned build: Windows SmartScreen will ask for
+confirmation on first run. The compiled
+`installer/Output/opencode-blueprint-setup-<version>.exe` is intentionally
+**not** committed — grab it from GitHub Releases.
+
 ## Commands (global, work in any project)
 
 | Command | Does |

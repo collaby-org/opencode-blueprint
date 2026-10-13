@@ -1,0 +1,19 @@
+opencode-blueprint setup finished.
+
+Config files were deployed to your opencode config home
+(%OPENCODE_CONFIG_HOME%, or %USERPROFILE%\.config\opencode when unset):
+  opencode.jsonc, AGENTS.md, commands\, plugins\.
+Existing opencode.jsonc / AGENTS.md were backed up with a .bak-<timestamp>
+suffix before overwrite. config\.env.example was created only if missing —
+existing keys/values are never overwritten. Copy it to .env in the same
+folder and fill in the values (key names: DATABASE_URL,
+MDB_MCP_CONNECTION_STRING, REDIS_URL, GOOGLE_APPLICATION_CREDENTIALS,
+GOOGLE_PROJECT_ID, CONTEXT7_API_KEY, SENTRY_ACCESS_TOKEN,
+OPENCODE_ZEN_API_KEY, plus KODUS_TEAM_KEY — or run: kodus auth login).
+
+IMPORTANT: Restart opencode fully — quit the app AND kill any opencode-cli
+sidecar, otherwise the first boot caches failed plugin resolutions.
+
+Remaining manual steps (see bin/setup.mjs 6/6): kodus auth login,
+gh auth login, kubeconfig for the kubernetes MCP, and per repo run
+/pr-agent-setup once (adds the PR-Agent Action; set the OPENAI_KEY secret).

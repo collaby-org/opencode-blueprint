@@ -9,3 +9,5 @@ Thumbs.db
 # Root session dumps (opencode session export artifacts) — never commit
 new-session---*.json
 .opencode/*.log
+# Inno Setup build output (distributed via GitHub Releases, not git)
+installer/Output/
