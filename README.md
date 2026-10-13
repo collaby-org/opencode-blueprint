@@ -45,9 +45,9 @@ finished answer — researched, de-duplicated, and verified working together:
 |---|---|
 | `oh-my-opencode-slim` | 7-agent orchestration (the one orchestrator — swarm/micode/OAC intentionally excluded) |
 | `opencode-mem` | Automatic long-term memory with vector recall |
-| `opencode-dcp` (local vendored copy) | Context pruning (pairs with memory, not against it) — vendored from `@tarquinen/opencode-dcp@3.2.0` with the visible `<dcp-system-reminder>` leak fixed locally, pending upstream [#608](https://github.com/Opencode-DCP/opencode-dynamic-context-pruning/issues/608) |
-| `opencode-review` | Auto code-review on idle + `/review` + auto-fix (local install — not on npm) |
-| `opencode-telemetry` (local port) | Local cost/usage telemetry — `/telemetry-report` + `/telemetry-inspect` (no sqlite, no npm) |
+| `opencode-dcp` (local vendored copy) | Context pruning (pairs with memory, not against it) — vendored from `@tarquinen/opencode-dcp@3.2.0` with `<dcp-system-reminder>` blocks relocated into `event.system` instead of rendering as chat bubbles (a `synthetic`-flag experiment was reverted after the 2.0.24 host proved to drop `synthetic` parts from model context), pending upstream [#608](https://github.com/Opencode-DCP/opencode-dynamic-context-pruning/issues/608) |
+| `opencode-review` | `/review` command + `review` / `review:fixer` agents with dimension prompts (local install — not on npm; the idle auto-trigger has no v2 hook and stays unwired) |
+| `opencode-telemetry` (local port) | Local cost/usage telemetry — `/telemetry-report` + `/telemetry-inspect` over a local file store (no sqlite, no npm) |
 | `opencode-ralph-wiggum` (local port) | Iterative dev loops — `/ralph-loop`, `/ralph-continue`, `/cancel-ralph` (no npm) |
 | `opencode-github-release` (local port) | Semantic-version GitHub releases — bump suggestion + tag/publish (no npm) |
 | `envsitter-guard` (local port) | Safe `.env` inspection/mutation that never prints secrets; blocks direct `.env` reads (no npm) |
@@ -58,6 +58,16 @@ finished answer — researched, de-duplicated, and verified working together:
 > `opencode-ralph-wiggum` (`/ralph-loop`), `opencode-github-release`,
 > `envsitter-guard` (`.env` guard), `opencode-log-sanitizer`,
 > `opencode-command-inject`. Nothing from the npm set remains removed.
+>
+> Ported to the opencode v2 plugin API (`Plugin.define({ id, setup })`,
+> verified against the 2.0.24 host): imports use the resolvable
+> `@opencode-ai/plugin/v2/promise` subpath (the bare `@opencode/plugin`
+> root does not resolve in the Bun loader — first boot after install
+> must be a **full** restart, killing the `opencode-cli` sidecar too,
+> or failed resolutions stay negatively cached); commands register via
+> add-only `editor.add` (`draft.update` does not exist on command drafts
+> and disables the plugin); the installer pins the central
+> `@opencode-ai/plugin@^1.18.32` fallback the loader walks up to.
 
 ### Skills (88) — stack knowledge
 
@@ -103,8 +113,11 @@ npx opencode-blueprint
 ```
 
 The installer: checks prerequisites → backs up your existing config →
-copies `opencode.jsonc` + `AGENTS.md` + commands → installs the local
-plugin's deps → installs all 88 skills globally → installs the Kodus CLI
+copies `opencode.jsonc` + `AGENTS.md` + commands + `.env.example` starter →
+copies all 8 local plugin trees and installs each one's deps (plus the
+central `@opencode-ai/plugin` fallback the loader resolves against) →
+installs all 88 skills globally (registry via `skills add`, 16 workflow
+skills vendored from `skills/`) → installs the Kodus CLI
 and `redis-mcp-server` → prints your personal checklist.
 
 Then:
@@ -166,9 +179,10 @@ credentials out (keys live in GitHub secrets and shell env, see
 | Path | What |
 |---|---|
 | `AGENTS.md` | Global workflow (source of truth) |
-| `config/opencode.jsonc` | 21 MCPs · 9 plugins · instructions |
+| `config/opencode.jsonc` | 21 MCPs (5 GCP remotes disabled — no dynamic client registration) · 2 npm + 8 local plugins · instructions |
 | `config/commands/` | `/pr-agent`, `/pr-agent-setup`, `/kodus-review` |
-| `config/plugins/opencode-review/` | Local review plugin sources |
+| `config/plugins/` | 8 local plugin trees: `opencode-review`, `opencode-dcp` (vendored 3.2.0), + 6 v2 ports (github-release, telemetry, envsitter-guard, log-sanitizer, command-inject, ralph-wiggum) |
+| `skills/` | 16 vendored workflow skills (rest via installer registry list) |
 | `config/.env.example` | Required env vars (values never committed) |
 | `bin/setup.mjs` | The installer |
 
