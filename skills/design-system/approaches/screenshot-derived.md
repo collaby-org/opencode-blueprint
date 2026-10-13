@@ -5,3 +5,4 @@
 - Tokenize with the repo's own prefix convention (`<prefix>-` + role, e.g. `--myapp-bg-primary`); semantic names, never raw hex above the token layer.
 - Rebuild the screenshot's structure from system primitives; pixel-tweaking raw CSS to "look right" is forbidden — if no token fits, add the token.
 - Be very accurate to the chosen source; never guess values a screenshot cannot resolve (mark TBD, check code).
+- References are design evidence — never invent product requirements, never copy sample data as real data. When implementation was requested, the rebuilt UI still owes the complete system (`reference/master-instructions.md` §57), not just matching pixels.

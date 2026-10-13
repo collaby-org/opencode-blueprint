@@ -1,12 +1,19 @@
 {
-  "components": [
-    {
-      "name": "Example",
-      "path": "components/Example/",
-      "variants": ["default"],
-      "states": ["default", "hover", "focus", "disabled", "loading"],
-      "docs": "components/Example/README.md",
-      "stories": "components/Example/Example.stories.tsx"
-    }
-  ]
+  "statuses": ["specified", "implemented", "integrated", "validated"],
+  "_statusMeanings": {
+    "specified": "documented but not implemented",
+    "implemented": "exists in runtime code",
+    "integrated": "used by a real page, screen, or pattern",
+    "validated": "applicable validation actually passed"
+  },
+  "_shape": {
+    "name": "<ComponentName>",
+    "path": "<real source path>",
+    "variants": ["<variant>"],
+    "states": ["<applicable states>"],
+    "status": "specified|implemented|integrated|validated",
+    "docs": "<real docs path>",
+    "visualContract": "<real pointer — story, device-render, or page-render per master §40 and the matching approach; always present once implemented, never null when owed>"
+  },
+  "components": []
 }

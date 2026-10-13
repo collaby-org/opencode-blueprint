@@ -1,5 +1,6 @@
-/* Tokens index (SOURCE — never @imported across package boundaries).
+/* Tokens index — CSS-STACKS STARTER (SOURCE — never @imported across package boundaries).
    Each app materializes its own copy into its own styles location.
+   Non-CSS stacks materialize tokens per the matching approaches/ file instead.
    Replace PREFIX with the repo's own token prefix. */
 
 :root {

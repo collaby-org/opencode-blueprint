@@ -1,14 +1,18 @@
 {
-  "pages": [
-    {
-      "name": "ExamplePage",
-      "route": "/example",
-      "sections": [
-        { "name": "Header", "components": ["AppHeader"] },
-        { "name": "Main", "components": ["TBD"] }
-      ],
-      "patterns": ["TBD"],
-      "responsive": "TBD (mobile collapse behavior)"
-    }
-  ]
+  "statuses": ["specified", "implemented", "integrated", "validated"],
+  "_statusMeanings": {
+    "specified": "documented but not implemented",
+    "implemented": "exists in runtime code",
+    "integrated": "used by a real page, screen, or pattern",
+    "validated": "applicable validation actually passed"
+  },
+  "_shape": {
+    "name": "<PageName>",
+    "route": "<real route>",
+    "sections": [{ "name": "<Section>", "components": ["<RegisteredComponent>"] }],
+    "patterns": ["<RegisteredPattern>"],
+    "responsive": "<real collapse behavior for the form factor>",
+    "status": "specified|implemented|integrated|validated"
+  },
+  "pages": []
 }

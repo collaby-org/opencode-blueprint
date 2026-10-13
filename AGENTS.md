@@ -140,6 +140,7 @@ root; monorepo root shared plus per-app, following repo shape).
 At the start of every UI task, check it exists and read `DESIGN_SYSTEM.md`
 + the `ai/` registry before designing — then follow the `design-system`
 skill: existing non-empty system → ADOPT (follow, extend, never replace);
+explicit substantial-redesign intent → REDESIGN (brief → audit → proposal → conflict-resolved replacement);
 missing or empty → GENERATE (ask intent first, scaffold from it, TBD over
 invention). Tokens → primitives → components → patterns → pages. Never
 `@import` design-system CSS across package boundaries — each app

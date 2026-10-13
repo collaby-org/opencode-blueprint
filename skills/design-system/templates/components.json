@@ -1,0 +1,7 @@
+{
+  "_scope": "Alias-file stacks only (component-alias maps). Reuse the stack's existing file where present; omit where the stack has no such file.",
+  "_shape": {
+    "aliases": { "<alias>": "<path>" }
+  },
+  "aliases": {}
+}

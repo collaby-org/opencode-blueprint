@@ -1,7 +1,7 @@
 # OpenCode Blueprint
 
 > One command. A complete, opinionated, production-grade [opencode](https://opencode.ai)
-> environment — **21 MCPs, 10 plugins, 88 skills, a global agent workflow,**
+> environment — **21 MCPs, 10 plugins, 90 skills, a global agent workflow,**
 > and **Kodus + PR-Agent** review loops. Built for teams shipping
 > Apple-clean, award-worthy software.
 
@@ -69,7 +69,7 @@ finished answer — researched, de-duplicated, and verified working together:
 > and disables the plugin); the installer pins the central
 > `@opencode-ai/plugin@^1.18.32` fallback the loader walks up to.
 
-### Skills (88) — stack knowledge
+### Skills (90) — stack knowledge
 
 | Stack | Skills |
 |---|---|
@@ -78,7 +78,7 @@ finished answer — researched, de-duplicated, and verified working together:
 | Prisma / Postgres | `prisma-database-setup`, `prisma-client-api`, `prisma-cli`, `prisma-postgres`, `prisma-postgres-setup`, `prisma-upgrade-v7`, `prisma-mongodb-upgrade` |
 | Expo mobile | `expo-overview`, `expo-router`, `expo-upgrade`, `expo-native-ui`, `expo-data-fetching`, `eas-app-stores`, `eas-workflows`, `eas-update` |
 | Tauri desktop | `tauri-v2` |
-| Design (all S-rank) | `apple-design`, `animate`, `animate-expo`, `animation-vocabulary`, `emil-design-eng`, `review-animations`, `improve-animations`, `find-animation-opportunities`, `pick-ui-library`, `prototype`, `design-taste-frontend`, `impeccable`, `shadcn` |
+| Design (all S-rank) | `apple-design`, `animate`, `animate-expo`, `animation-vocabulary`, `animation-performance`, `emil-design-eng`, `review-animations`, `improve-animations`, `find-animation-opportunities`, `pick-ui-library`, `prototype`, `design-taste-frontend`, `impeccable`, `shadcn`, `ask-sonner`, `mobile-native`, `break-ui` |
 | Workflow | `new-feature`, `code-structure`, `evidence-driven-testing`, `before-and-after`, `unslop`, `perf-debug`, `excalidraw-diagram` |
 | API design / contract | `api-designer`, `graphql-architect` |
 | Realtime / sockets | `websocket-engineer` |
@@ -116,7 +116,7 @@ The installer: checks prerequisites → backs up your existing config →
 copies `opencode.jsonc` + `AGENTS.md` + commands + `.env.example` starter →
 copies all 8 local plugin trees and installs each one's deps (plus the
 central `@opencode-ai/plugin` fallback the loader resolves against) →
-installs all 88 skills globally (registry via `skills add`, 16 workflow
+installs all 90 skills globally (registry via `skills add`, 16 workflow
 skills vendored from `skills/`) → installs the Kodus CLI
 and `redis-mcp-server` → prints your personal checklist.
 
