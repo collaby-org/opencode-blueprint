@@ -49,6 +49,7 @@ const SKILLS = [
   ["shadcn-ui/ui@shadcn", []],
   ["expo/skills", ["expo-overview", "expo-router", "expo-upgrade", "expo-native-ui", "expo-data-fetching", "eas-app-stores", "eas-workflows", "eas-update"]],
   ["nodnarbnitram/claude-code-extensions", ["tauri-v2"]],
+  ["morluto/rea", ["reverse-engineer-anything", "rea-changelog-update", "rea-ci-tests-audit", "rea-tool-design"]],
 ];
 
 // ---------------------------------------------------------------- main

@@ -107,6 +107,7 @@ Load the skills matching the target. Nothing else.
 | E2E / browser testing | `playwright-expert` |
 | Security review / hardening | `secure-code-guardian`, `security-reviewer` (→ Kodus gate) |
 | Legacy modernization | `legacy-modernizer` |
+| Reverse-engineer a function/feature/app | `reverse-engineer-anything` (+ `rea` MCP) — understanding or rebuilding a feature from a shipped app/binary, reimplementing a function based on one, comparing versions. Skip for ordinary source analysis (use normal repo tools) |
 | Adversarial review | `the-fool` |
 | NestJS deep work | `nestjs-expert` (+ `nestjs-best-practices`) |
 | Next.js deep work | `nextjs-developer` (+ `nextjs-best-practices`) |

@@ -1,7 +1,7 @@
 # OpenCode Blueprint
 
 > One command. A complete, opinionated, production-grade [opencode](https://opencode.ai)
-> environment — **21 MCPs, 10 plugins, 90 skills, a global agent workflow,**
+> environment — **22 MCPs, 10 plugins, 94 skills, a global agent workflow,**
 > and **Kodus + PR-Agent** review loops. Built for teams shipping
 > Apple-clean, award-worthy software.
 
@@ -38,6 +38,7 @@ finished answer — researched, de-duplicated, and verified working together:
 | Data | `supabase`, `prisma`, `postgres`, `mongodb`, `redis` |
 | Cloud & infra | `gcp-bigquery`, `gcp-compute`, `gcp-gke`, `gcp-run`, `gcp-storage`, `cloudflare`, `kubernetes` |
 | Payments & analytics | `stripe`, `google-analytics` |
+| Reverse engineering | `rea` (local `rea-agents`; binaries, JS/Electron, .NET, APKs, firmware — needs provider tools for deep native work) |
 
 ### Plugins (10) — runtime superpowers
 
@@ -69,7 +70,7 @@ finished answer — researched, de-duplicated, and verified working together:
 > and disables the plugin); the installer pins the central
 > `@opencode-ai/plugin@^1.18.32` fallback the loader walks up to.
 
-### Skills (90) — stack knowledge
+### Skills (94) — stack knowledge
 
 | Stack | Skills |
 |---|---|
@@ -86,6 +87,7 @@ finished answer — researched, de-duplicated, and verified working together:
 | E2E / browser testing | `playwright-expert` |
 | Security review / hardening | `secure-code-guardian`, `security-reviewer` |
 | Legacy modernization | `legacy-modernizer` |
+| Reverse-engineer a function/feature/app | `reverse-engineer-anything` (+ `rea` MCP) — plus REA companion dev skills `rea-changelog-update`, `rea-ci-tests-audit`, `rea-tool-design` |
 | Adversarial review | `the-fool` |
 | NestJS deep work | `nestjs-expert` |
 | Next.js deep work | `nextjs-developer` |
@@ -116,7 +118,7 @@ The installer: checks prerequisites → backs up your existing config →
 copies `opencode.jsonc` + `AGENTS.md` + commands + `.env.example` starter →
 copies all 8 local plugin trees and installs each one's deps (plus the
 central `@opencode-ai/plugin` fallback the loader resolves against) →
-installs all 90 skills globally (registry via `skills add`, 16 workflow
+installs all 94 skills globally (registry via `skills add`, 16 workflow
 skills vendored from `skills/`) → installs the Kodus CLI
 and `redis-mcp-server` → prints your personal checklist.
 
@@ -192,7 +194,7 @@ credentials out (keys live in GitHub secrets and shell env, see
 | Path | What |
 |---|---|
 | `AGENTS.md` | Global workflow (source of truth) |
-| `config/opencode.jsonc` | 21 MCPs (5 GCP remotes disabled — no dynamic client registration) · 2 npm + 8 local plugins · instructions |
+| `config/opencode.jsonc` | 22 MCPs (5 GCP remotes disabled — no dynamic client registration) · 2 npm + 8 local plugins · instructions |
 | `config/commands/` | `/pr-agent`, `/pr-agent-setup`, `/kodus-review` |
 | `config/plugins/` | 8 local plugin trees: `opencode-review`, `opencode-dcp` (vendored 3.2.0), + 6 v2 ports (github-release, telemetry, envsitter-guard, log-sanitizer, command-inject, ralph-wiggum) |
 | `skills/` | 16 vendored workflow skills (rest via installer registry list) |
