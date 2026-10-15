@@ -149,7 +149,7 @@
     },
     "prisma": {
       "type": "local",
-      "command": ["npx", "-y", "prisma", "mcp"],
+      "command": ["npx", "-y", "prisma@7.10.1", "mcp"],
       "enabled": true
     },
     "postgres": {
@@ -187,7 +187,7 @@
     },
     "rea": {
       "type": "local",
-      "command": ["npx", "-y", "rea-agents"],
+      "command": ["npx", "-y", "rea-agents@6.5.0", "mcp"],
       "enabled": true
     }
   }
