@@ -68,7 +68,7 @@ finished answer — researched, de-duplicated, and verified working together:
 > or failed resolutions stay negatively cached); commands register via
 > add-only `editor.add` (`draft.update` does not exist on command drafts
 > and disables the plugin); the installer pins the central
-> `@opencode-ai/plugin@^1.18.32` fallback the loader walks up to.
+> `@opencode-ai/plugin@^1.19.1` fallback the loader walks up to.
 
 ### Skills (94) — stack knowledge
 

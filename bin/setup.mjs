@@ -118,7 +118,7 @@ let centralPkg = {};
 if (existsSync(centralPkgPath)) {
   centralPkg = JSON.parse(readFileSync(centralPkgPath, "utf8"));
 }
-centralPkg.dependencies = { ...(centralPkg.dependencies || {}), "@opencode-ai/plugin": "^1.18.32" };
+centralPkg.dependencies = { ...(centralPkg.dependencies || {}), "@opencode-ai/plugin": "^1.19.1" };
 if (!DRY) writeFileSync(centralPkgPath, JSON.stringify(centralPkg, null, 2) + "\n");
 else log(`  write ${centralPkgPath} (merge @opencode-ai/plugin into dependencies)`);
 run("npm", ["install", "--prefix", TARGET, "--no-audit", "--no-fund"]);
