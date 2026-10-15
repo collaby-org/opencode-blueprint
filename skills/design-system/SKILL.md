@@ -22,6 +22,22 @@ Substantial redesign = the brief replaces tokens/brand/IA/navigation or reworks 
 
 When implementation was requested, the workflow delivers a complete implemented system — never documentation-only. That means: documented design language + brand; semantic tokens AND real runtime theme resources; implemented primitives; implemented component library; documented + implemented page patterns; real pages composed from shared components; registries matching real code; validation tooling + a verified completion report. `DESIGN_SYSTEM.md` is documentation, not proof. Documentation-only is the exception, allowed only per the docs-only test in §58. A proposal is an intermediate deliverable, never completion, when implementation was requested. Full definition, statuses, and completion gates live in `reference/master-instructions.md` (§57, §59).
 
+## Screenshot-derived systems
+
+When screenshots are the brief, treat them as a first-class visual evidence set before choosing a visual direction. Read `approaches/screenshot-derived.md` alongside the stack approach and record the evidence in the installed system.
+
+- Inventory every supplied viewport and map each relevant route/pattern to its source image. Extract repeated layout, surface, type, accent, density, navigation, and responsive behaviour before inventing a token.
+- Derive the default theme from the repeated evidence. A dark-first reference set yields a dark-first system; do not impose a light default from generic product convention. Still author both dark and light semantic palettes unless the brief explicitly excludes a theme.
+- Preserve evidence-backed geometry and information hierarchy—not sample balances, copy, dates, identities, or unlicensed imagery. Media is a named slot with accessibility rules, never a palette or a required carrier of meaning.
+- Add a route-level fidelity checklist: side-by-side comparison at the source viewport, plus responsive and alternate-theme validation once runtime code exists.
+- A screenshot task is route-locked: build the named route from its paired reference, not a generic landing page or a visually similar surface. Do not change public home while implementing dashboard, markets, wallet, or terminal work unless that public route is explicitly in scope.
+- A reference screen's visible modules are a minimum inventory. A generic hero, loading skeleton, blank panel, footer, fallback state, or missing-data placeholder cannot stand in for a reference module in a visual acceptance render. Use deterministic representative data where live data is unavailable, while keeping real loading/error states separately testable.
+- Do not call the work visually complete until every target route is rendered at the reference viewport, compared side-by-side, and passes its required-element inventory. If the current route is empty, crashes, or remains in a loading state, fix that blocker before claiming screenshot fidelity.
+- Treat a redesign as a behaviour-preserving migration. Before replacing a route, capture its working route, API/data dependencies, controls, and critical user flow. After replacement, the same route must load, preserve its interactions, have no new console/network failures, and retain every existing capability through the new composition.
+- Public marketing chrome is not a safe global fallback. Do not inject public footers, generic campaign banners, or unrelated CTAs into authenticated account, wallet, referral, exchange, or terminal routes. Each layout owns its shell and route composition.
+- Do not use a visual fixture to hide broken live behaviour. Fixtures are development-only comparison data with no side effects; production data paths, empty states, error states, chart normalisation, and order safeguards must remain functional and be verified separately.
+- If the user explicitly limits work to `design-system/` or other documentation/token paths, produce an honest **specified system target**: tokens, component/page contracts, source mapping, deterministic validation, and registry entries marked `specified`. Do not falsely mark it implemented or claim the app was migrated. Runtime migration remains required when the permitted scope expands.
+
 ## Invariants (always apply)
 
 - Token hierarchy: tokens → primitives → components → patterns → templates → pages → features. Build upward only; never place raw values above the token layer.
