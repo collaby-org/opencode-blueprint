@@ -1,0 +1,6 @@
+{
+  // Don't stamp orchestrator as default agent: during multi-project
+  // restore, sessions drain before the per-directory agent draft is
+  // ready and die with `Agent not found: "orchestrator"`.
+  "setDefaultAgent": false
+}

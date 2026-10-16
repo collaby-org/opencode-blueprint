@@ -57,11 +57,10 @@
     // dcp is vendored locally at plugins/opencode-dcp (pending upstream #608
     // visible-tag fix) — path plugins auto-load, so no npm entry here;
     // leaving "@tarquinen/opencode-dcp" would double-load it.
-    // Removed 2026-10-06: opencode-github-release, opencode-telemetry,
+    // Local path plugins (opencode-github-release, opencode-telemetry,
     // opencode-ralph-wiggum, envsitter-guard, opencode-log-sanitizer,
-    // opencode-command-inject — all ship the old bare-function format (or no
-    // default export) and the installed build rejects them. Re-add once
-    // upstream migrates to the v2 { id, setup/effect } definition.
+    // opencode-command-inject, opencode-review, opencode-dcp) — all export
+    // v2 { id, setup } and auto-load from plugins/, so no npm entries here.
   ],
   "mcp": {
     "notion": {

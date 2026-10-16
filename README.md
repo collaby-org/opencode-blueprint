@@ -29,7 +29,7 @@ finished answer — researched, de-duplicated, and verified working together:
 
 ## What's inside
 
-### MCPs (21) — live access
+### MCPs (22) — live access
 
 | Area | Servers |
 |---|---|
@@ -69,6 +69,13 @@ finished answer — researched, de-duplicated, and verified working together:
 > add-only `editor.add` (`draft.update` does not exist on command drafts
 > and disables the plugin); the installer pins the central
 > `@opencode-ai/plugin@^1.19.1` fallback the loader walks up to.
+
+> `oh-my-opencode-slim` ships with `setDefaultAgent: false`
+> (`config/oh-my-opencode-slim.jsonc`, installed copy-if-missing): slim
+> otherwise stamps `orchestrator` as every session's default agent, and
+> during multi-project restore sessions drain before the per-directory
+> agent draft is ready — host kills them with
+> `Agent not found: "orchestrator"` (`Failed to drain Session`).
 
 ### Skills (94) — stack knowledge
 

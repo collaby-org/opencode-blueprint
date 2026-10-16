@@ -95,6 +95,17 @@ if (!existsSync(envExampleDest)) {
 } else {
   log(`  skip ${envExampleDest} (already exists — not overwriting filled template)`);
 }
+// Slim plugin config: setDefaultAgent=false so sessions keep the native
+// default agent. Slim otherwise stamps orchestrator as default, and during
+// multi-project restore sessions drain before the per-directory agent draft
+// is ready and die with `Agent not found: "orchestrator"`. Copy-if-missing
+// only — never overwrite a user-tuned config.
+const slimCfgDest = join(TARGET, "oh-my-opencode-slim.jsonc");
+if (!existsSync(slimCfgDest)) {
+  cp(join(REPO, "config", "oh-my-opencode-slim.jsonc"), slimCfgDest);
+} else {
+  log(`  skip ${slimCfgDest} (already exists — not overwriting user config)`);
+}
 
 log("== 3/6 local plugin deps (review, dcp + 6 ports) ==");
 run("npm", ["install", "--prefix", join(TARGET, "plugins", "opencode-review"), "@opencode-ai/plugin"]);
