@@ -24,6 +24,7 @@ export interface PreparedSession {
     searchContext: SearchContext;
 }
 export declare function prepareSession(ctx: ToolContext, toolCtx: RunContext, title: string): Promise<PreparedSession>;
+export declare function resetCompressPending(ctx: ToolContext, toolCtx: RunContext): Promise<void>;
 export declare function finalizeSession(ctx: ToolContext, toolCtx: RunContext, rawMessages: WithParts[], entries: NotificationEntry[], batchTopic: string | undefined): Promise<void>;
 export {};
 //# sourceMappingURL=pipeline.d.ts.map

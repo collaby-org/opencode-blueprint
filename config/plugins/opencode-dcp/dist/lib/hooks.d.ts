@@ -23,7 +23,7 @@ export declare function createCommandExecuteHandler(client: any, state: SessionS
 }, output: {
     parts: any[];
 }) => Promise<void>;
-export declare function createTextCompleteHandler(): (_input: {
+export declare function createTextCompleteHandler(state: SessionState): (_input: {
     sessionID: string;
     messageID: string;
     partID: string;

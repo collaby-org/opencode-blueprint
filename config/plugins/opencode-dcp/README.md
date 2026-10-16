@@ -46,6 +46,8 @@ In `range` mode, when a new compression overlaps an earlier one, the earlier sum
 
 Identifies repeated tool calls (same tool, same arguments) and keeps only the most recent output. Recalculated when the compress tool runs, so prompt cache is only impacted alongside compression.
 
+When a provider reuses a tool call ID, DCP retains those calls instead of automatically pruning or sweeping an ambiguous ID. Unique IDs keep the normal pruning behavior. Original provider call/result IDs are preserved.
+
 ### Purge Errors
 
 Prunes inputs from errored tool calls after a configurable number of turns. Error messages are preserved; only the potentially large input content is removed. Recalculated on compress tool use.
@@ -187,7 +189,7 @@ Each level overrides the previous, so project settings take priority over global
 DCP provides a TUI panel and one prompt-producing slash command:
 
 - `/dcp` — Opens the DCP panel with context, stats, and manual-mode controls.
-- `/dcp-compress [focus]` — Asks the model to run one compression pass. Optional focus text directs what content to compress, following the active `compress.mode`.
+- `/dcp-compress [focus]` — Asks the model to run one compression pass. Optional focus text directs what content to compress, following the active `compress.mode`. On OpenCode v2 this is registered in the slash palette and dispatches the server `dcp-compress` command.
 
 ### Prompt Overrides
 

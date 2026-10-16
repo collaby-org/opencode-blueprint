@@ -1684,7 +1684,12 @@ function isProtectedUserMessage(config, message) {
 }
 
 // lib/token-utils.ts
-var anthropicCountTokens = _anthropicTokenizer.countTokens ?? _anthropicTokenizer.default?.countTokens;
+var getAnthropicTokenizer = _anthropicTokenizer.getTokenizer ?? _anthropicTokenizer.default?.getTokenizer;
+var anthropicTokenizer;
+function anthropicCountTokens(text) {
+  anthropicTokenizer ??= getAnthropicTokenizer();
+  return anthropicTokenizer.encode(text.normalize("NFKC"), "all").length;
+}
 function getCurrentTokenUsage(state, messages) {
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i];
@@ -2403,6 +2408,58 @@ function applyCompressionState(state, input, selection, anchorMessageId, blockId
   };
 }
 
+// lib/compress/args.ts
+var NON_EMPTY_ARRAY_ERROR_MESSAGE = "content is required and must be a non-empty array";
+function isStringFields(value, keys) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const record = value;
+  return keys.every((key) => typeof record[key] === "string");
+}
+function coerceContentArray(raw, isEntry, guidance) {
+  if (Array.isArray(raw)) {
+    return raw;
+  }
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+      let parsed;
+      try {
+        parsed = JSON.parse(trimmed);
+      } catch {
+        parsed = void 0;
+      }
+      if (Array.isArray(parsed)) {
+        if (parsed.length === 0) {
+          throw new Error(NON_EMPTY_ARRAY_ERROR_MESSAGE);
+        }
+        return parsed;
+      }
+      if (isEntry(parsed)) {
+        return [parsed];
+      }
+    }
+    throw new Error(`content must be a JSON array, not a plain string. ${guidance}`);
+  }
+  if (raw !== null && typeof raw === "object" && isEntry(raw)) {
+    return [raw];
+  }
+  throw new Error(NON_EMPTY_ARRAY_ERROR_MESSAGE);
+}
+function normalizeCompressArgs(args, spec) {
+  if (args === null || typeof args !== "object" || Array.isArray(args)) {
+    throw new Error(
+      `compress takes a JSON object with "topic" (string) and "content" (array of ${spec.contentNoun}). Re-send as: ${spec.shapeExample}`
+    );
+  }
+  const { topic, content } = args;
+  return {
+    topic,
+    content: coerceContentArray(content, spec.isEntry, spec.contentGuidance)
+  };
+}
+
 // lib/compress/message-utils.ts
 var SoftIssue = class extends Error {
   constructor(kind, messageId, message) {
@@ -2413,6 +2470,19 @@ var SoftIssue = class extends Error {
   kind;
   messageId;
 };
+var MESSAGE_ENTRY_KEYS = ["messageId", "topic", "summary"];
+function isMessageEntry(value) {
+  return isStringFields(value, MESSAGE_ENTRY_KEYS);
+}
+var MESSAGE_CONTENT_GUIDANCE = 're-send with content as an array of message objects: [{ "messageId": "m0001", "topic": "...", "summary": "..." }]. ' + "messageId must be the message ID (mNNNN), visible as a <dcp-message-id> tag in context, that your summary covers. " + "A summary string alone does not say which message to replace.";
+function normalizeMessageArgs(args) {
+  return normalizeCompressArgs(args, {
+    isEntry: isMessageEntry,
+    contentNoun: "messages",
+    shapeExample: '{ "topic": "...", "content": [{ "messageId": "m0001", "topic": "...", "summary": "..." }] }',
+    contentGuidance: MESSAGE_CONTENT_GUIDANCE
+  });
+}
 function validateArgs(args) {
   if (typeof args.topic !== "string" || args.topic.trim().length === 0) {
     throw new Error("topic is required and must be a non-empty string");
@@ -2436,7 +2506,7 @@ function validateArgs(args) {
 }
 function formatResult(processedCount, skippedIssues, skippedCount) {
   const messageNoun = processedCount === 1 ? "message" : "messages";
-  const processedText = processedCount > 0 ? `Compressed ${processedCount} ${messageNoun} into ${COMPRESSED_BLOCK_HEADER}.` : "Compressed 0 messages.";
+  const processedText = processedCount > 0 ? `Compressed ${processedCount} ${messageNoun} into ${COMPRESSED_BLOCK_HEADER}. Compression is a background context-management action, not task completion. Continue your in-progress task from where you left off.` : "Compressed 0 messages.";
   if (skippedCount === 0) {
     return processedText;
   }
@@ -3237,9 +3307,32 @@ async function refreshManualMode(state, sessionId, logger, manualModeDefault) {
 
 // lib/state/tool-cache.ts
 var MAX_TOOL_CACHE_SIZE = 1e3;
+
+// lib/tool-ids.ts
+function getAmbiguousToolIds(messages) {
+  const seen = /* @__PURE__ */ new Set();
+  const ambiguous = /* @__PURE__ */ new Set();
+  for (const message of messages) {
+    const parts = Array.isArray(message.parts) ? message.parts : [];
+    for (const part of parts) {
+      if (part.type !== "tool" || !part.callID) continue;
+      if (seen.has(part.callID)) ambiguous.add(part.callID);
+      seen.add(part.callID);
+    }
+  }
+  return ambiguous;
+}
+function toolOccurrenceKey(message, part) {
+  return JSON.stringify([message.info.id, part.id ?? part.callID]);
+}
 function syncToolCache(state, config, logger, messages) {
   try {
     logger.info("Syncing tool parameters from OpenCode messages");
+    const ambiguousIds = getAmbiguousToolIds(messages);
+    for (const id of ambiguousIds) {
+      state.toolParameters.delete(id);
+      state.prune.tools.delete(id);
+    }
     let turnCounter = 0;
     for (const msg of messages) {
       if (isMessageCompacted(state, msg)) {
@@ -3251,7 +3344,7 @@ function syncToolCache(state, config, logger, messages) {
           turnCounter++;
           continue;
         }
-        if (part.type !== "tool" || !part.callID) {
+        if (part.type !== "tool" || !part.callID || ambiguousIds.has(part.callID)) {
           continue;
         }
         const turnProtectionEnabled = config.turnProtection.enabled;
@@ -3423,7 +3516,10 @@ var deduplicate = (state, logger, config, messages) => {
   if (allToolIds.length === 0) {
     return;
   }
-  const unprunedIds = allToolIds.filter((id) => !state.prune.tools.has(id));
+  const ambiguousIds = getAmbiguousToolIds(messages);
+  const unprunedIds = allToolIds.filter(
+    (id) => !state.prune.tools.has(id) && !ambiguousIds.has(id)
+  );
   if (unprunedIds.length === 0) {
     return;
   }
@@ -3509,7 +3605,10 @@ var purgeErrors = (state, logger, config, messages) => {
   if (allToolIds.length === 0) {
     return;
   }
-  const unprunedIds = allToolIds.filter((id) => !state.prune.tools.has(id));
+  const ambiguousIds = getAmbiguousToolIds(messages);
+  const unprunedIds = allToolIds.filter(
+    (id) => !state.prune.tools.has(id) && !ambiguousIds.has(id)
+  );
   if (unprunedIds.length === 0) {
     return;
   }
@@ -3996,7 +4095,7 @@ async function prepareSession(ctx, toolCtx, title) {
     searchContext: buildSearchContext(ctx.state, rawMessages)
   };
 }
-async function finalizeSession(ctx, toolCtx, rawMessages, entries, batchTopic) {
+async function resetCompressPending(ctx, toolCtx) {
   if (ctx.state.manualMode === "compress-pending") {
     ctx.state.manualMode = false;
     await refreshManualMode(
@@ -4006,6 +4105,9 @@ async function finalizeSession(ctx, toolCtx, rawMessages, entries, batchTopic) {
       ctx.config.manualMode.enabled
     );
   }
+}
+async function finalizeSession(ctx, toolCtx, rawMessages, entries, batchTopic) {
+  await resetCompressPending(ctx, toolCtx);
   applyPendingCompressionDurations(ctx.state);
   await saveSessionState(ctx.state, ctx.logger);
   const params = getCurrentParams(ctx.state, rawMessages, ctx.logger);
@@ -4172,7 +4274,8 @@ async function appendProtectedTools(client, state, allowSubAgents, summary, sele
             output2 = typeof part.state.output === "string" ? part.state.output : JSON.stringify(part.state.output);
           }
           if (allowSubAgents && (part.tool === "task" || part.tool === "subagent") && part.state?.status === "completed" && typeof part.state?.output === "string") {
-            const cachedSubAgentResult = state.subAgentResultCache.get(part.callID);
+            const cacheKey = toolOccurrenceKey(message, part);
+            const cachedSubAgentResult = state.subAgentResultCache.get(cacheKey);
             if (cachedSubAgentResult !== void 0) {
               if (cachedSubAgentResult) {
                 output2 = mergeSubagentResult(
@@ -4194,7 +4297,7 @@ async function appendProtectedTools(client, state, allowSubAgents, summary, sele
                   subAgentResultText = "";
                 }
                 if (subAgentResultText) {
-                  state.subAgentResultCache.set(part.callID, subAgentResultText);
+                  state.subAgentResultCache.set(cacheKey, subAgentResultText);
                   output2 = mergeSubagentResult(
                     part.state.output,
                     subAgentResultText
@@ -4243,7 +4346,8 @@ function createCompressMessageTool(ctx) {
     description: runtimePrompts.compressMessage + messageFormat(ctx.state.idFormat),
     args: buildSchema(ctx.state.idFormat),
     async execute(args, toolCtx) {
-      const input = args;
+      try {
+      const input = normalizeMessageArgs(args);
       validateArgs(input);
       const callId = typeof toolCtx.callID === "string" ? toolCtx.callID : void 0;
       const { rawMessages, searchContext } = await prepareSession(
@@ -4322,6 +4426,9 @@ function createCompressMessageTool(ctx) {
       }
       await finalizeSession(ctx, toolCtx, rawMessages, notifications, input.topic);
       return formatResult(plans.length, skippedIssues, skippedCount);
+      } finally {
+        await resetCompressPending(ctx, toolCtx);
+      }
     }
   });
 }
@@ -4331,6 +4438,19 @@ import { tool as tool2 } from "@opencode-ai/plugin";
 
 // lib/compress/range-utils.ts
 var BLOCK_PLACEHOLDER_REGEX = /\(b(\d+)\)|\{block_(\d+)\}/gi;
+var RANGE_ENTRY_KEYS = ["startId", "endId", "summary"];
+function isRangeEntry(value) {
+  return isStringFields(value, RANGE_ENTRY_KEYS);
+}
+var RANGE_CONTENT_GUIDANCE = 're-send with content as an array of range objects: [{ "startId": "m0001", "endId": "m0031", "summary": "..." }]. ' + "startId and endId must be the message (mNNNN) or compressed-block (bN) IDs, visible as <dcp-message-id> tags in context, " + "that bound the range your summary covers. A summary string alone does not say which messages to replace.";
+function normalizeRangeArgs(args) {
+  return normalizeCompressArgs(args, {
+    isEntry: isRangeEntry,
+    contentNoun: "ranges",
+    shapeExample: '{ "topic": "...", "content": [{ "startId": "m0001", "endId": "m0031", "summary": "..." }] }',
+    contentGuidance: RANGE_CONTENT_GUIDANCE
+  });
+}
 function validateArgs2(args) {
   if (typeof args.topic !== "string" || args.topic.trim().length === 0) {
     throw new Error("topic is required and must be a non-empty string");
@@ -4580,7 +4700,8 @@ function createCompressRangeTool(ctx) {
     description: runtimePrompts.compressRange + rangeFormat(ctx.state.idFormat),
     args: buildSchema2(ctx.state.idFormat),
     async execute(args, toolCtx) {
-      const input = args;
+      try {
+      const input = normalizeRangeArgs(args);
       validateArgs2(input);
       const callId = typeof toolCtx.callID === "string" ? toolCtx.callID : void 0;
       const { rawMessages, searchContext } = await prepareSession(
@@ -4688,7 +4809,10 @@ function createCompressRangeTool(ctx) {
         });
       }
       await finalizeSession(ctx, toolCtx, rawMessages, notifications, input.topic);
-      return `Compressed ${totalCompressedMessages} messages into ${COMPRESSED_BLOCK_HEADER}.`;
+      return `Compressed ${totalCompressedMessages} messages into ${COMPRESSED_BLOCK_HEADER}. Compression is a background context-management action, not task completion. Continue your in-progress task from where you left off.`;
+      } finally {
+        await resetCompressPending(ctx, toolCtx);
+      }
     }
   });
 }
@@ -5527,6 +5651,10 @@ var DCP_UNPAIRED_TAG_REGEX = /<\/?dcp[^>]*>/gi;
 var INJECTED_MESSAGE_ID_SUFFIX_REGEX = /(?<=\n)<dcp-message-id[^>]*>m\d+<\/dcp-message-id>\s*$/;
 var HALLUCINATED_PARAMETER_SUFFIX_REGEX = /(?<=\n)m\d+<\/parameter>\s*$/;
 var COMPACT_TAG_REGEX = /@(?:[1-9]\d*|b[1-9]\d*|blocked)@(?:[ \t]+\[(?:low|medium|high)\])?/gi;
+var DEGENERATE_TAG_LINE_PATTERN = String.raw`[ \t]*<{1,2}\/?[ \t]*(?:dcp[a-z-]*|m\d+|b\d+)?[ \t]*>?[ \t]*`;
+var DEGENERATE_TAG_DEBRIS_REGEX = new RegExp(
+  String.raw`(?:\n${DEGENERATE_TAG_LINE_PATTERN}){2,}\n?$`
+);
 var generateStableId = (prefix, seed) => {
   const hash = createHash("sha256").update(seed).digest("hex").slice(0, SUMMARY_ID_HASH_LENGTH);
   return `${prefix}_${hash}`;
@@ -5652,7 +5780,7 @@ var replaceBlockIdsWithBlocked = (text, format2 = "xml") => {
 var stripHallucinationsFromString = (text, format2 = "xml") => {
   if (format2 === "compact") text = text.replace(COMPACT_TAG_REGEX, "");
   const withoutKnownSuffixes = text.replace(INJECTED_MESSAGE_ID_SUFFIX_REGEX, "").replace(HALLUCINATED_PARAMETER_SUFFIX_REGEX, "");
-  return withoutKnownSuffixes.replace(DCP_PAIRED_TAG_REGEX, "").replace(DCP_UNPAIRED_TAG_REGEX, "");
+  return withoutKnownSuffixes.replace(DCP_PAIRED_TAG_REGEX, "").replace(DCP_UNPAIRED_TAG_REGEX, "").replace(DEGENERATE_TAG_DEBRIS_REGEX, "");
 };
 var stripHallucinations = (messages, format2 = "xml") => {
   for (const message of messages) {
@@ -5672,6 +5800,7 @@ var PRUNED_TOOL_OUTPUT_REPLACEMENT = "[Output removed to save context - informat
 var PRUNED_TOOL_ERROR_INPUT_REPLACEMENT = "[input removed due to failed tool call]";
 var PRUNED_QUESTION_INPUT_REPLACEMENT = "[questions removed - see output for user's answers]";
 var prune = (state, logger, config, messages, summaryBase) => {
+  for (const id of getAmbiguousToolIds(messages)) state.prune.tools.delete(id);
   filterCompressedRanges(state, logger, config, messages, summaryBase);
   pruneToolOutputs(state, logger, messages);
   pruneToolInputs(state, logger, messages);
@@ -6420,7 +6549,8 @@ var injectExtendedSubAgentResults = async (client, state, logger, messages, allo
       if (part.state?.status !== "completed" || typeof part.state.output !== "string") {
         continue;
       }
-      const cachedResult = state.subAgentResultCache.get(part.callID);
+      const cacheKey = toolOccurrenceKey(message, part);
+      const cachedResult = state.subAgentResultCache.get(cacheKey);
       if (cachedResult !== void 0) {
         if (cachedResult) {
           part.state.output = stripHallucinationsFromString(
@@ -6449,7 +6579,7 @@ var injectExtendedSubAgentResults = async (client, state, logger, messages, allo
       if (!subAgentResultText) {
         continue;
       }
-      state.subAgentResultCache.set(part.callID, subAgentResultText);
+      state.subAgentResultCache.set(cacheKey, subAgentResultText);
       part.state.output = stripHallucinationsFromString(
         mergeSubagentResult(part.state.output, subAgentResultText),
         state.idFormat
@@ -7472,8 +7602,9 @@ async function handleSweepCommand(ctx) {
       );
     }
   }
+  const ambiguousIds = getAmbiguousToolIds(messages);
   const newToolIds = toolIdsToSweep.filter((id) => {
-    if (state.prune.tools.has(id)) {
+    if (state.prune.tools.has(id) || ambiguousIds.has(id)) {
       return false;
     }
     const entry = state.toolParameters.get(id);
@@ -7745,9 +7876,9 @@ function createCommandExecuteHandler(client, state, logger, config, workingDirec
     }
   };
 }
-function createTextCompleteHandler() {
+function createTextCompleteHandler(state) {
   return async (_input, output2) => {
-    output2.text = stripHallucinationsFromString(output2.text);
+    output2.text = stripHallucinationsFromString(output2.text, state.idFormat);
   };
 }
 function createEventHandler(state, logger) {
@@ -8104,6 +8235,7 @@ function relocateSystemRemindersToSystem(messages) {
 }
 function project(native, entries, session2) {
   const byID = new Map(entries.map((entry) => [entry.id, entry]));
+  const calls = /* @__PURE__ */ new Map();
   const results = /* @__PURE__ */ new Map();
   const owners = /* @__PURE__ */ new Map();
   const links = /* @__PURE__ */ new Map();
@@ -8111,8 +8243,14 @@ function project(native, entries, session2) {
   const messages = [];
   for (const message of native)
     for (const part of message.content) {
-      if (part.type === "tool-result") results.set(part.id, part);
-      if (part.type === "tool-call" && message.id) owners.set(part.id, message.id);
+      if (part.type === "tool-call") calls.set(part.id, { part, messageId: message.id });
+      if (part.type === "tool-result") {
+        const call = calls.get(part.id);
+        if (!call) continue;
+        results.set(call.part, part);
+        if (call.messageId) owners.set(part, call.messageId);
+        calls.delete(part.id);
+      }
     }
   for (const message of native) {
     if (!message.id || !["user", "assistant"].includes(message.role)) continue;
@@ -8126,16 +8264,18 @@ function project(native, entries, session2) {
       let projected2;
       if (part.type === "text")
         projected2 = { ...base, id: `${message.id}:${index}`, type: "text", text: part.text };
-      if (part.type === "media")
+      if (part.type === "media") {
+        const { source, mediaType } = part.media;
         projected2 = {
           ...base,
           id: `${message.id}:${index}`,
           type: "file",
-          mime: part.mediaType,
-          url: typeof part.data === "string" ? part.data : ""
+          mime: mediaType,
+          url: source.type === "url" ? source.url : source.type === "base64" ? source.data : ""
         };
+      }
       if (part.type === "tool-call") {
-        const result = results.get(part.id);
+        const result = results.get(part);
         const entry2 = byID.get(message.id);
         const durable = entry2?.type === "assistant" ? entry2.content.find((item) => item.type === "tool" && item.id === part.id) : void 0;
         projected2 = {
@@ -8197,7 +8337,7 @@ function project(native, entries, session2) {
       ) ?? [];
       for (const part of message.content) {
         if (part.type === "tool-call") content.push(...added.splice(0));
-        if (part.type === "tool-result" && originals.has(owners.get(part.id)) && !retained.has(owners.get(part.id)))
+        if (part.type === "tool-result" && originals.has(owners.get(part)) && !retained.has(owners.get(part)))
           continue;
         const edit = links.get(part);
         if (part.type === "text" && edit?.type === "text")
@@ -8609,7 +8749,7 @@ var server = (async (ctx) => {
       prompts,
       hostPermissions
     ),
-    "experimental.text.complete": createTextCompleteHandler(),
+    "experimental.text.complete": createTextCompleteHandler(state),
     "command.execute.before": createCommandExecuteHandler(
       ctx.client,
       state,

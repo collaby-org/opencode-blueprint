@@ -1,6 +1,8 @@
 import type { CompressionBlock, SessionState } from "../state";
 import type { IdFormat } from "../message-ids";
-import type { BoundaryReference, CompressRangeToolArgs, InjectedSummaryResult, ParsedBlockPlaceholder, ResolvedRangeCompression, SearchContext } from "./types";
+import type { BoundaryReference, CompressRangeEntry, CompressRangeToolArgs, InjectedSummaryResult, ParsedBlockPlaceholder, ResolvedRangeCompression, SearchContext } from "./types";
+export declare function isRangeEntry(value: unknown): value is CompressRangeEntry;
+export declare function normalizeRangeArgs(args: unknown): CompressRangeToolArgs;
 export declare function validateArgs(args: CompressRangeToolArgs): void;
 export declare function resolveRanges(args: CompressRangeToolArgs, searchContext: SearchContext, state: SessionState): ResolvedRangeCompression[];
 export declare function validateNonOverlapping(plans: ResolvedRangeCompression[]): void;
