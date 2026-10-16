@@ -67,19 +67,18 @@ export const createSyntheticTextPart = (
     const deterministicSeed = stableSeed?.trim() || userInfo.id
     const partId = generateStableId("prt_dcp_text", deterministicSeed)
 
-    // NOTE (reverted): do NOT mark injected parts `synthetic: true`.
-    // The 2.0.24 host honors `synthetic` by dropping such parts from the
-    // model-visible context, which silently strips fallback-carried @N@
-    // boundary IDs (compress then reports "no id"). Reminder visibility
-    // (upstream #608) is handled by relocateSystemRemindersToSystem, which
-    // moves reminder text into event.system instead. This restores exact
-    // upstream part shape.
+    // Upstream-verified (opencode v2.0.24 source): `synthetic` text parts
+    // are hidden from chat rendering but still sent to the model, while
+    // plain injected parts render visibly (the `[]`/tag leak). Do NOT
+    // remove this flag: without it the IDs show in chat; with it the
+    // model still resolves them for compress.
     return {
         id: partId,
         sessionID: userInfo.sessionID,
         messageID: userInfo.id,
         type: "text" as const,
         text: content,
+        synthetic: true,
     }
 }
 

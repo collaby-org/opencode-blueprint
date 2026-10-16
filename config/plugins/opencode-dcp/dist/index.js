@@ -5695,7 +5695,9 @@ var createSyntheticTextPart = (baseMessage, content, stableSeed) => {
     messageID: userInfo.id,
     type: "text",
     text: content,
-    // NOTE (reverted): no `synthetic: true` — see lib/messages/utils.ts.
+    // NOTE: `synthetic: true` hides injected parts from chat rendering
+    // while the model still receives them (verified in host source).
+    synthetic: true
   };
 };
 var appendToLastTextPart = (message, injection) => {
