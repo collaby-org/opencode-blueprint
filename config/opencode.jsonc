@@ -184,9 +184,15 @@
       "url": "https://lucide-animated.com/mcp",
       "enabled": true
     },
+    // Pinned runtime + pinned CLI script, not `npx`: `npx` resolves whatever
+    // `node` is first on PATH, and rea-agents@6.5.0 needs Node >= 20.12
+    // (Node 18 dies on node:util styleText); a bare `npx -y rea-agents` also
+    // exits 0 after a help banner without ever handshaking. Both paths below
+    // are machine-specific — bin/setup.mjs repoints them on install (an
+    // nvm version dir is not portable across machines).
     "rea": {
       "type": "local",
-      "command": ["npx", "-y", "rea-agents@6.5.0", "mcp"],
+      "command": ["C:\\Users\\horgh\\AppData\\Local\\nvm\\v26.10.0\\node.exe", "C:\\Users\\horgh\\.config\\opencode\\tools\\rea-agents\\node_modules\\rea-agents\\scripts\\rea.mjs", "mcp"],
       "enabled": true
     }
   }

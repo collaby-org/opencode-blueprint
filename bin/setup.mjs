@@ -4,7 +4,7 @@
 //   npx development-base            # full install
 //   npx development-base --dry-run  # print what would happen
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, copyFileSync, cpSync, rmSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, copyFileSync, cpSync, rmSync, readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -30,6 +30,132 @@ const has = (cmd) => {
   } catch {
     return false;
   }
+};
+
+// ------------------------------------------------------- node runtime probe
+// The repo config pins an absolute Node exe + absolute CLI script for `rea`,
+// because `npx` resolves whatever `node` is first on PATH and a machine-wide
+// downgrade (e.g. to Node 18) crashes rea-agents with "does not provide an
+// export named 'styleText'" (needs Node >= 20.12). So resolve at install
+// time: newest nvm runtime, else the system-wide install, else this
+// process's own runtime. Anything below the floor is rejected outright — a
+// Node 18 path must never be written to the config.
+const NODE_MIN = [20, 12, 0];
+const verParts = (v) => String(v).trim().replace(/^v/, "").split(/[.+-]/).map((n) => Number.parseInt(n, 10) || 0);
+const verCmp = (a, b) => {
+  const x = typeof a === "string" ? verParts(a) : a;
+  const y = typeof b === "string" ? verParts(b) : b;
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    const d = (x[i] || 0) - (y[i] || 0);
+    if (d) return d;
+  }
+  return 0;
+};
+const nodeCandidates = () => {
+  const found = [];
+  const add = (exe) => {
+    if (!exe || !existsSync(exe) || found.some((c) => c.exe === exe)) return;
+    try {
+      // --version on the exe itself: a node that cannot report its version
+      // is not a runtime we can trust to spawn.
+      const ver = execFileSync(exe, ["--version"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+      if (ver) found.push({ exe, ver });
+    } catch {
+      // not a working node — ignore
+    }
+  };
+  // nvm-for-windows: %LOCALAPPDATA%\nvm\v<major>.<minor>.<patch>\node.exe
+  const localAppData = process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local");
+  const nvmRoot = join(localAppData, "nvm");
+  if (existsSync(nvmRoot)) {
+    for (const entry of readdirSync(nvmRoot, { withFileTypes: true })) {
+      if (entry.isDirectory()) add(join(nvmRoot, entry.name, "node.exe"));
+    }
+  }
+  // System-wide install, then the runtime running this installer.
+  add(join(process.env.ProgramFiles || "C:\\Program Files", "nodejs", "node.exe"));
+  add(process.execPath);
+  return found.sort((a, b) => verCmp(b.ver, a.ver));
+};
+// ----------------------------------------------------------- jsonc tolerant
+// config/opencode.jsonc is JSONC (block/line comments, trailing commas), so
+// JSON.parse throws on the copy this script just installed. Strip comments
+// and trailing commas outside of strings, then parse.
+const parseJsonc = (text) => {
+  let out = "";
+  let inStr = false;
+  let esc = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    const next = text[i + 1];
+    if (esc) {
+      out += c;
+      esc = false;
+      continue;
+    }
+    if (c === "\\" && inStr) {
+      out += c;
+      esc = true;
+      continue;
+    }
+    if (c === '"') {
+      inStr = !inStr;
+      out += c;
+      continue;
+    }
+    if (!inStr && c === "/" && next === "/") {
+      while (i < text.length && text[i] !== "\n") i++;
+      out += "\n";
+      continue;
+    }
+    if (!inStr && c === "/" && next === "*") {
+      i += 2;
+      while (i < text.length && !(text[i] === "*" && text[i + 1] === "/")) i++;
+      i++;
+      continue;
+    }
+    if (!inStr && c === ",") {
+      // drop a comma that only precedes a closing bracket
+      let j = i + 1;
+      while (j < text.length && /\s/.test(text[j])) j++;
+      if (text[j] === "}" || text[j] === "]") continue;
+    }
+    out += c;
+  }
+  return JSON.parse(out);
+};
+
+// --------------------------------------------------- jsonc surgical rewrite
+// opencode.jsonc is JSONC, so the two MCP repoints below must never round-trip
+// it through JSON.parse/JSON.stringify: JSON.parse throws on its comments (the
+// repoint silently no-ops behind a `warn`), and a stringify rewrite deletes
+// every comment the user wrote — including the `rea` entry's rationale. So
+// rewrite ONLY the `"command": [ ... ]` array text, leaving the rest of the
+// bytes (comments, blank lines, indentation, EOL style) untouched.
+const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const replaceMcpCommand = (cfgPath, key, nextArgs) => {
+  const raw = readFileSync(cfgPath, "utf8");
+  // Anchor on the exact quoted key first (`"key"\s*:\s*\{`) so a key that is a
+  // prefix of another (`rea` vs `rea-agents`) or a mention in prose cannot
+  // match. `[^{}]*?` then walks to the entry's own `"command": [...]` — safe
+  // because MCP entries are flat (no nested braces), and requiring the command
+  // array before the closing `}` keeps the match on the right block even if the
+  // key also appears in a comment.
+  const re = new RegExp(`("${escRe(key)}"\\s*:\\s*\\{[^{}]*?"command"\\s*:\\s*)\\[[^\\]]*\\]`);
+  if (!re.test(raw)) throw new Error(`no "${key}.command" array found in ${cfgPath}`);
+  // Function replacement (not a "$1..." string) so a `$&`/`$'`-looking segment
+  // in a Windows path is copied through verbatim.
+  const next = raw.replace(re, (_full, head) => `${head}[${nextArgs.map((a) => JSON.stringify(String(a))).join(", ")}]`);
+  // Validate in memory BEFORE writing: the result must still parse, and the
+  // entry must carry exactly the array we meant to write. A regex that landed
+  // on the wrong block fails here and leaves the file untouched.
+  const parsed = parseJsonc(next);
+  const cmd = parsed?.mcp?.[key]?.command;
+  if (!Array.isArray(cmd) || JSON.stringify(cmd) !== JSON.stringify(nextArgs)) {
+    throw new Error(`refusing to write ${cfgPath}: "${key}.command" would be ${JSON.stringify(cmd)}, expected ${JSON.stringify(nextArgs)}`);
+  }
+  writeFileSync(cfgPath, next);
+  return cmd;
 };
 
 // ---------------------------------------------------------------- skills
@@ -171,12 +297,10 @@ if (has("python")) {
       const scripts = execFileSync("python", ["-c", "import sysconfig; print(sysconfig.get_path('scripts'))"], { encoding: "utf8" }).trim();
       const exe = join(scripts, "redis-mcp-server.exe");
       const cfgPath = join(TARGET, "opencode.jsonc");
-      const cfg = JSON.parse(readFileSync(cfgPath, "utf8"));
-      if (cfg?.mcp?.redis) {
-        cfg.mcp.redis.command = [exe, "--url", "{env:REDIS_URL}"];
-        writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
-        log(`  redis MCP -> ${exe}`);
-      }
+      // JSONC-aware: JSON.parse throws on this file's comments, and a
+      // JSON.stringify round-trip would strip them.
+      replaceMcpCommand(cfgPath, "redis", [exe, "--url", "{env:REDIS_URL}"]);
+      log(`  redis MCP -> ${exe}`);
     } catch (e) {
       log(`  warn: could not repoint redis MCP (${e.message})`);
     }
@@ -184,6 +308,38 @@ if (has("python")) {
     log("  [dry-run] would repoint redis MCP at this machine's pip Scripts dir");
   }
 } else log("  skip: redis-mcp-server (no python)");
+
+// The repo's rea entry points at the author's nvm dir + CLI script — repoint
+// it at this machine's install (both are absolute, neither is portable). Same
+// pattern as the redis repoint above; the version is pinned, and both repoints
+// rewrite only the `"command": [...]` array in place, so the user's comments
+// (and this entry's own rationale) survive the install.
+const REA_PKG = "rea-agents@6.5.0";
+const REA_DIR = join(TARGET, "tools", "rea-agents");
+const REA_CLI = join(REA_DIR, "node_modules", "rea-agents", "scripts", "rea.mjs");
+run("npm", ["install", "--prefix", REA_DIR, "--no-audit", "--no-fund", REA_PKG]);
+if (DRY) {
+  log("  [dry-run] would repoint rea MCP at this machine's newest Node >= 20.12 + the installed rea.mjs");
+} else if (!existsSync(REA_CLI)) {
+  log(`  warn: ${REA_CLI} missing after install — rea MCP left at the repo's absolute paths`);
+} else {
+  try {
+    const cfgPath = join(TARGET, "opencode.jsonc");
+    const cfg = parseJsonc(readFileSync(cfgPath, "utf8"));
+    const cands = nodeCandidates();
+    const picked = cands.find((c) => verCmp(c.ver, NODE_MIN) >= 0);
+    if (!cfg?.mcp?.rea) throw new Error(`no mcp.rea entry in ${cfgPath}`);
+    // Never write a too-old runtime: a Node 18 exe makes rea-agents@6.5.0
+    // crash on `styleText`, which is worse than an unrepointed entry.
+    if (!picked) {
+      throw new Error(`no Node >= ${NODE_MIN.join(".")} found (candidates: ${cands.map((c) => `${c.exe} -> ${c.ver}`).join(", ") || "none"}) — install Node >= ${NODE_MIN.join(".")} and rerun, rea MCP left untouched`);
+    }
+    replaceMcpCommand(cfgPath, "rea", [picked.exe, REA_CLI, "mcp"]);
+    log(`  rea MCP -> ${picked.exe} (${picked.ver}) + ${REA_CLI}`);
+  } catch (e) {
+    log(`  warn: could not repoint rea MCP (${e.message})`);
+  }
+}
 
 log("== 6/6 manual steps (cannot be automated) ==");
 log(`

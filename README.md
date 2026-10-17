@@ -38,7 +38,14 @@ finished answer — researched, de-duplicated, and verified working together:
 | Data | `supabase`, `prisma`, `postgres`, `mongodb`, `redis` |
 | Cloud & infra | `gcp-bigquery`, `gcp-compute`, `gcp-gke`, `gcp-run`, `gcp-storage`, `cloudflare`, `kubernetes` |
 | Payments & analytics | `stripe`, `google-analytics` |
-| Reverse engineering | `rea` (local `rea-agents`; binaries, JS/Electron, .NET, APKs, firmware — needs provider tools for deep native work) |
+| Reverse engineering | `rea` (pinned `rea-agents@6.5.0`; binaries, JS/Electron, .NET, APKs, firmware — needs provider tools for deep native work) |
+
+> `rea` runs as `[<absolute node.exe>, <absolute rea.mjs>, "mcp"]`: the pinned
+> Node the installer resolves (>= 20.12) plus the pinned CLI it installs to
+> `<config>/tools/rea-agents`. Not `npx` — `npx` takes whatever `node` is first
+> on PATH (a machine-wide downgrade to Node 18 crashes 6.5.0 on `node:util`'s
+> `styleText`), and a bare `npx -y rea-agents` exits 0 after a help banner
+> without ever handshaking. Both absolute paths are repointed per machine.
 
 ### Plugins (10) — runtime superpowers
 
@@ -127,7 +134,9 @@ copies all 8 local plugin trees and installs each one's deps (plus the
 central `@opencode-ai/plugin` fallback the loader resolves against) →
 installs all 94 skills globally (registry via `skills add`, 16 workflow
 skills vendored from `skills/`) → installs the Kodus CLI
-and `redis-mcp-server` → prints your personal checklist.
+and `redis-mcp-server` → installs the pinned `rea-agents` under
+`<config>/tools/rea-agents` and repoints the `rea` MCP at this machine's
+newest Node >= 20.12 → prints your personal checklist.
 
 Then:
 
