@@ -28,9 +28,13 @@ Staged diffs stay small (full-PR bot reviews time out past ~120k tokens) and ski
 
 CLI: `npm install -g @kodus/cli`. Auth via `kodus auth login`, or solo-private team key per shell (global/skill file only — local machine, never committed to git, never pasted elsewhere):
 
-`$env:KODUS_TEAM_KEY = 'kodus_H_n5XzUkGfM2O5kY2f0JszKovhgGxdFc6iHmMylCngY'`
+`$env:KODUS_TEAM_KEY = '<your-team-key>'`
 
 Persist for future shells via `setx` / `kodus auth team-key --key ...` using the same value.
+
+Get a team key from https://app.kodus.io/organization/cli-keys. Never commit it
+to a repo — a key that was committed once is already leaked and must be
+rotated, not just deleted.
 
 ## Backends
 

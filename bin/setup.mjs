@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 // One-command opencode setup: MCPs, plugins, skills, AGENTS.md, commands, CLIs.
 // Usage on a fresh machine (after `npm publish`, or via git):
-//   npx development-base            # full install
-//   npx development-base --dry-run  # print what would happen
+//   npx opencode-blueprint            # full install
+//   npx opencode-blueprint --dry-run  # print what would happen
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, copyFileSync, cpSync, rmSync, readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, dirname } from "node:path";
+import { join, dirname, delimiter } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const DRY = process.argv.includes("--dry-run");
@@ -31,6 +31,13 @@ const has = (cmd) => {
     return false;
   }
 };
+// An absolute path to an executable needs no shell — and must NOT go through
+// one on Windows: `cmd /c "C:\Program Files\...\python.exe ..."` breaks on the
+// spaces in the path. execFileSync with an absolute path skips the shell.
+const runAbs = (exe, args) => {
+  log(`$ ${exe} ${args.join(" ")}`);
+  if (!DRY) execFileSync(exe, args, { stdio: "inherit" });
+};
 
 // ------------------------------------------------------- node runtime probe
 // The repo config pins an absolute Node exe + absolute CLI script for `rea`,
@@ -41,6 +48,12 @@ const has = (cmd) => {
 // process's own runtime. Anything below the floor is rejected outright — a
 // Node 18 path must never be written to the config.
 const NODE_MIN = [20, 12, 0];
+// The `skills` CLI (>= 1.7) imports `fs/promises.glob`, which only exists on
+// Node >= 22.20 — under an older `node` on PATH every `skills add` dies with
+// "The requested module 'fs/promises' does not provide an export named
+// 'glob'". That floor is for the SKILLS step only; rea/rea-MCP is happy at
+// NODE_MIN, so it keeps the lower floor.
+const NODE_MIN_SKILLS = [22, 20, 0];
 const verParts = (v) => String(v).trim().replace(/^v/, "").split(/[.+-]/).map((n) => Number.parseInt(n, 10) || 0);
 const verCmp = (a, b) => {
   const x = typeof a === "string" ? verParts(a) : a;
@@ -158,6 +171,87 @@ const replaceMcpCommand = (cfgPath, key, nextArgs) => {
   return cmd;
 };
 
+// ------------------------------------------------------- autoinvoke mirror
+// Matt Pocock's user-invoked skills ship Claude's `disable-model-invocation:
+// true`. OpenCode ignores that key, so those skills would stay model-
+// autoinvocable and could fire against our own gates (/the-fool,
+// /feature-forge, /code-reviewer). OpenCode's own key is
+// `metadata.opencode/autoinvoke: "false"`, so mirror the Claude flag into
+// OpenCode's namespace. `skills add` rewrites SKILL.md from upstream, so this
+// has to run AFTER every install — and it must be idempotent: the key is
+// rewritten in place, never duplicated.
+const AUTOINVOKE_SKILLS = [
+  "grilling", "grill-me", "grill-with-docs", "writing-for-agents",
+  "domain-modeling", "research", "handoff", "retro", "prototype", "pr", "ask-matt",
+];
+const AUTOINVOKE_KEY = "opencode/autoinvoke";
+const AUTOINVOKE_VALUE = '"false"';
+
+// Returns a short status string for the log: missing | no-frontmatter |
+// not-user-invoked | already-patched | patched | would-patch | unsupported
+const patchAutoinvoke = (file) => {
+  if (!existsSync(file)) return "missing";
+  const text = readFileSync(file, "utf8");
+  const fm = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!fm) return "no-frontmatter";
+  const lines = fm[1].split(/\r?\n/);
+  // Only skills that opted out of model invocation need the mirror.
+  if (!lines.some((l) => /^\s*disable-model-invocation:\s*true\s*$/.test(l))) return "not-user-invoked";
+  const eol = text.includes("\r\n") ? "\r\n" : "\n";
+  const isKey = (l) => l.trim().startsWith(AUTOINVOKE_KEY + ":");
+  let metaIdx = -1;
+  let metaInline = "";
+  for (let i = 0; i < lines.length; i++) {
+    const mm = lines[i].match(/^metadata:\s*(.*)$/);
+    if (mm) {
+      metaIdx = i;
+      metaInline = mm[1].trim();
+      break;
+    }
+  }
+  let next;
+  if (metaIdx === -1) {
+    // No metadata mapping yet — add one, keeping every pre-existing key.
+    next = [...lines, "metadata:", `  ${AUTOINVOKE_KEY}: ${AUTOINVOKE_VALUE}`];
+  } else if (!metaInline) {
+    // Block mapping: merge into it, keeping every pre-existing (nested) key.
+    let end = lines.length;
+    for (let i = metaIdx + 1; i < lines.length; i++) {
+      if (lines[i].trim() && !/^\s/.test(lines[i])) {
+        end = i;
+        break;
+      }
+    }
+    const children = lines.slice(metaIdx + 1, end).filter((l) => !isKey(l));
+    const indent = (children.find((l) => l.trim()) || "  ").match(/^\s*/)[0] || "  ";
+    next = [
+      ...lines.slice(0, metaIdx + 1),
+      `${indent}${AUTOINVOKE_KEY}: ${AUTOINVOKE_VALUE}`,
+      ...children,
+      ...lines.slice(end),
+    ];
+  } else if (metaInline.startsWith("{") && metaInline.endsWith("}")) {
+    // Flow mapping: splice the key inside the braces.
+    const parts = metaInline
+      .slice(1, -1)
+      .split(",")
+      .map((p) => p.trim())
+      .filter(Boolean)
+      .filter((p) => !p.startsWith(AUTOINVOKE_KEY + ":"));
+    parts.push(`${AUTOINVOKE_KEY}: ${AUTOINVOKE_VALUE}`);
+    next = [...lines];
+    next[metaIdx] = `metadata: { ${parts.join(", ")} }`;
+  } else {
+    return "unsupported";
+  }
+  const head = text.slice(0, fm[0].indexOf("\n") + 1);
+  const tail = text.slice(fm[0].length);
+  const patched = `${head}${next.join(eol)}${eol}---${tail}`;
+  if (patched === text) return "already-patched";
+  if (!DRY) writeFileSync(file, patched);
+  return DRY ? "would-patch" : "patched";
+};
+
 // ---------------------------------------------------------------- skills
 // [repo, skill names] — empty array = whole repo
 const SKILLS = [
@@ -176,6 +270,12 @@ const SKILLS = [
   ["expo/skills", ["expo-overview", "expo-router", "expo-upgrade", "expo-native-ui", "expo-data-fetching", "eas-app-stores", "eas-workflows", "eas-update"]],
   ["nodnarbnitram/claude-code-extensions", ["tauri-v2"]],
   ["morluto/rea", ["reverse-engineer-anything", "rea-changelog-update", "rea-ci-tests-audit", "rea-tool-design"]],
+  ["cathrynlavery/diagram-design", ["diagram-design"]],
+  ["heygen-com/hyperframes", ["hyperframes", "hyperframes-core", "hyperframes-animation", "hyperframes-audio", "hyperframes-cli", "hyperframes-creative", "hyperframes-keyframes", "hyperframes-registry", "hyperframes-studio", "media-use", "pr-to-video", "product-launch-video", "faceless-explainer", "general-video"]],
+  // No `prototype` here on purpose: emilkowalski/skills ships the variants
+  // picker that AGENTS.md routes for component work, mattpocock ships a
+  // throwaway-prototype builder. One directory, one name — keep the routed one.
+  ["mattpocock/skills", ["grilling", "grill-me", "grill-with-docs", "writing-for-agents", "domain-modeling", "research", "handoff", "retro", "pr", "ask-matt"]],
 ];
 
 // ---------------------------------------------------------------- main
@@ -221,6 +321,17 @@ if (!existsSync(envExampleDest)) {
 } else {
   log(`  skip ${envExampleDest} (already exists — not overwriting filled template)`);
 }
+// Create the .env the {env:...} placeholders expand from. Without it
+// DATABASE_URL / REDIS_URL / MDB_MCP_CONNECTION_STRING expand to an empty
+// string and those MCPs die at startup (postgres: `new URL('')`). Copy the
+// template if missing — never overwrite an existing .env, it holds real
+// credentials.
+const envDest = join(TARGET, ".env");
+if (!existsSync(envDest)) {
+  cp(join(REPO, "config", ".env.example"), envDest);
+} else {
+  log(`  skip ${envDest} (already exists — not overwriting real credentials)`);
+}
 // Slim plugin config: setDefaultAgent=false so sessions keep the native
 // default agent. Slim otherwise stamps orchestrator as default, and during
 // multi-project restore sessions drain before the per-directory agent draft
@@ -262,11 +373,37 @@ run("npm", ["install", "--prefix", TARGET, "--no-audit", "--no-fund"]);
 
 log("== 4/6 skills (global, agent=opencode) ==");
 mkdirSync(SKILLS_DIR, { recursive: true });
-for (const [repo, skills] of SKILLS) {
-  const args = ["-y", "skills", "add", repo];
-  for (const s of skills) args.push("-s", s);
-  args.push("-a", "opencode", "-g", "-y");
-  run("npx", args);
+// `npx` resolves `node` from PATH, so a machine-wide Node 20 makes the
+// skills CLI (which needs Node >= 22.20 for fs/promises.glob) crash on EVERY
+// entry. Resolve a newer runtime and put its directory FIRST on PATH for the
+// duration of the install loop only.
+const skillsCands = nodeCandidates();
+const skillsOk = skillsCands.filter((c) => verCmp(c.ver, NODE_MIN_SKILLS) >= 0);
+if (!skillsOk.length) {
+  throw new Error(
+    `no Node >= ${NODE_MIN_SKILLS.join(".")} found for the skills step (candidates: ${skillsCands.map((c) => `${c.exe} -> ${c.ver}`).join(", ") || "none"}) — the skills CLI needs Node >= 22.20 for fs/promises.glob; install one and rerun`,
+  );
+}
+// Prefer a runtime that ships its own npx: npx.cmd runs the node next to it,
+// so PATH and the CLI's runtime stay on the same version.
+const skillsNode = skillsOk.find((c) => existsSync(join(dirname(c.exe), process.platform === "win32" ? "npx.cmd" : "npx"))) || skillsOk[0];
+log(`  skills step node -> ${skillsNode.exe} (${skillsNode.ver})`);
+const skillsPath = process.env.PATH || "";
+process.env.PATH = `${dirname(skillsNode.exe)}${delimiter}${skillsPath}`;
+try {
+  for (const [repo, skills] of SKILLS) {
+    const args = ["-y", "skills", "add", repo];
+    for (const s of skills) args.push("-s", s);
+    args.push("-a", "opencode", "-g", "-y");
+    run("npx", args);
+  }
+} finally {
+  process.env.PATH = skillsPath;
+}
+// `skills add` rewrote SKILL.md above, so re-apply OpenCode's autoinvoke
+// opt-out for the user-invoked skills (idempotent — see patchAutoinvoke).
+for (const name of AUTOINVOKE_SKILLS) {
+  log(`  autoinvoke ${name} -> ${patchAutoinvoke(join(SKILLS_DIR, name, "SKILL.md"))}`);
 }
 // Vendored local/workflow skills (skills/ in this repo) — cannot be installed
 // via `skills add`, copied verbatim. Overwrite is correct (versioned content,
@@ -341,11 +478,136 @@ if (DRY) {
   }
 }
 
+// The repo config pins the local MCPs below at the author's absolute paths
+// (prisma, postgres, mongodb, kubernetes, google-analytics). A fresh install
+// on another machine would inherit those dead paths, so each tool is
+// installed into TARGET/tools/<name> and the entry is repointed at the
+// machine-local install. Same pattern as the rea block above: the install
+// runs first, the repoint only ever writes a path that exists afterwards,
+// and the rewrite touches the `"command": [...]` array only — the file's
+// comments survive.
+const NODE_MIN_MCP = [20, 19, 0]; // prisma 7 + mongodb-mcp-server 3 engines
+const mcpCands = nodeCandidates();
+const mcpNode = mcpCands.find((c) => verCmp(c.ver, NODE_MIN_MCP) >= 0);
+// kubernetes-mcp-server ships one native binary package per platform; the
+// repo config pins the Windows one, so pick the package for THIS machine.
+const K8S_PLATFORM = `${process.platform === "win32" ? "windows" : process.platform === "darwin" ? "darwin" : "linux"}-${process.arch === "x64" ? "amd64" : process.arch === "arm64" ? "arm64" : process.arch}`;
+// [mcp key, tool dir, pinned npm package, entry path inside the tool dir,
+//  trailing command args, launcher]
+const MCP_TOOL_INSTALLS = [
+  {
+    key: "prisma",
+    dir: "prisma",
+    pkg: "prisma@7.10.1",
+    entry: ["node_modules", "prisma", "build", "index.js"],
+    args: ["mcp"],
+    via: "node",
+  },
+  {
+    key: "postgres",
+    dir: "postgres-mcp",
+    pkg: "@modelcontextprotocol/server-postgres@0.6.2",
+    entry: ["node_modules", "@modelcontextprotocol", "server-postgres", "dist", "index.js"],
+    args: ["{env:DATABASE_URL}"],
+    via: "node",
+  },
+  {
+    key: "mongodb",
+    dir: "mongodb-mcp",
+    pkg: "mongodb-mcp-server@3.1.0",
+    entry: ["node_modules", "mongodb-mcp-server", "dist", "esm", "index.js"],
+    args: ["--readOnly"],
+    via: "node",
+  },
+  {
+    key: "kubernetes",
+    dir: "kubernetes-mcp",
+    pkg: "kubernetes-mcp-server@0.0.67",
+    entry: [
+      "node_modules",
+      `kubernetes-mcp-server-${K8S_PLATFORM}`,
+      "bin",
+      `kubernetes-mcp-server-${K8S_PLATFORM}${process.platform === "win32" ? ".exe" : ""}`,
+    ],
+    args: ["--log-file", "stderr"],
+    via: "exe",
+  },
+];
+
+for (const t of MCP_TOOL_INSTALLS) {
+  const dir = join(TARGET, "tools", t.dir);
+  const entryPath = join(dir, ...t.entry);
+  log(`  install ${t.pkg} -> ${dir}`);
+  run("npm", ["install", "--prefix", dir, "--no-audit", "--no-fund", t.pkg]);
+  // node <entry> <args> for the JS MCPs; the platform binary itself for
+  // kubernetes (a native exe, not a node script).
+  const launcher = t.via === "node" ? mcpNode?.exe : null;
+  if (DRY) {
+    log(`  [dry-run] would repoint ${t.key} MCP at ${launcher ? `${launcher} ` : ""}${entryPath}${t.args.length ? ` ${t.args.join(" ")}` : ""}`);
+    continue;
+  }
+  if (t.via === "node" && !launcher) {
+    // Never write a too-old runtime: prisma 7 / mongodb-mcp-server 3 need
+    // Node >= 20.19 and crash on anything older.
+    log(`  warn: no Node >= ${NODE_MIN_MCP.join(".")} found (candidates: ${mcpCands.map((c) => `${c.exe} -> ${c.ver}`).join(", ") || "none"}) — ${t.key} MCP left at the repo's absolute paths`);
+    continue;
+  }
+  if (!existsSync(entryPath)) {
+    log(`  warn: ${entryPath} missing after install — ${t.key} MCP left at the repo's absolute paths`);
+    continue;
+  }
+  try {
+    const cfgPath = join(TARGET, "opencode.jsonc");
+    const cmd = [...(launcher ? [launcher] : []), entryPath, ...t.args];
+    replaceMcpCommand(cfgPath, t.key, cmd);
+    log(`  ${t.key} MCP -> ${cmd.join(" ")}`);
+  } catch (e) {
+    log(`  warn: could not repoint ${t.key} MCP (${e.message})`);
+  }
+}
+
+// google-analytics is a PyPI package, not an npm one: build a venv under
+// TARGET/tools/analytics-mcp, install the pinned wheel into it and point
+// the MCP at the venv's console script. Guarded end-to-end — no python, a
+// slow venv build or a failed pip install must warn and continue, never
+// abort the whole install.
+const ANALYTICS_PKG = "analytics-mcp==0.7.0";
+const ANALYTICS_DIR = join(TARGET, "tools", "analytics-mcp");
+const ANALYTICS_VENV = join(ANALYTICS_DIR, ".venv");
+const ANALYTICS_BIN = join(ANALYTICS_VENV, process.platform === "win32" ? "Scripts" : "bin");
+const ANALYTICS_PY = join(ANALYTICS_BIN, process.platform === "win32" ? "python.exe" : "python");
+const ANALYTICS_EXE = join(ANALYTICS_BIN, process.platform === "win32" ? "analytics-mcp.exe" : "analytics-mcp");
+if (!has("python")) {
+  log("  skip: analytics-mcp (no python)");
+} else {
+  try {
+    log(`  install ${ANALYTICS_PKG} -> ${ANALYTICS_DIR} (venv)`);
+    run("python", ["-m", "venv", ANALYTICS_VENV]);
+    runAbs(ANALYTICS_PY, ["-m", "pip", "install", ANALYTICS_PKG]);
+    if (DRY) {
+      log(`  [dry-run] would repoint google-analytics MCP at ${ANALYTICS_EXE}`);
+    } else if (!existsSync(ANALYTICS_EXE)) {
+      log(`  warn: ${ANALYTICS_EXE} missing after install — google-analytics MCP left at the repo's absolute paths`);
+    } else {
+      try {
+        const cfgPath = join(TARGET, "opencode.jsonc");
+        replaceMcpCommand(cfgPath, "google-analytics", [ANALYTICS_EXE]);
+        log(`  google-analytics MCP -> ${ANALYTICS_EXE}`);
+      } catch (e) {
+        log(`  warn: could not repoint google-analytics MCP (${e.message})`);
+      }
+    }
+  } catch (e) {
+    log(`  warn: analytics-mcp install failed (${e.message}) — google-analytics MCP left at the repo's absolute paths`);
+  }
+}
+
 log("== 6/6 manual steps (cannot be automated) ==");
 log(`
   1. Auth:  kodus auth login   (or export KODUS_TEAM_KEY)
             gh auth login
-  2. Env (copy config/.env.example to .env in the opencode config dir, then fill values):
+  2. Env (the installer copies config/.env.example to .env in the opencode
+     config dir if missing — fill the placeholders in, never overwrite it):
       CONTEXT7_API_KEY, SENTRY_ACCESS_TOKEN,
       GOOGLE_APPLICATION_CREDENTIALS, GOOGLE_PROJECT_ID, DATABASE_URL,
       MDB_MCP_CONNECTION_STRING, REDIS_URL, OPENCODE_ZEN_API_KEY,

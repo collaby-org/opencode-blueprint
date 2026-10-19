@@ -139,7 +139,7 @@
     },
     "google-analytics": {
       "type": "local",
-      "command": ["pipx", "run", "analytics-mcp"],
+      "command": ["C:\\Users\\horgh\\.config\\opencode\\tools\\analytics-mcp\\.venv\\Scripts\\analytics-mcp.exe"],
       "environment": {
         "GOOGLE_APPLICATION_CREDENTIALS": "{env:GOOGLE_APPLICATION_CREDENTIALS}",
         "GOOGLE_PROJECT_ID": "{env:GOOGLE_PROJECT_ID}"
@@ -148,17 +148,17 @@
     },
     "prisma": {
       "type": "local",
-      "command": ["npx", "-y", "prisma@7.10.1", "mcp"],
+      "command": ["C:\\Program Files\\nodejs\\node.exe", "C:\\Users\\horgh\\.config\\opencode\\tools\\prisma\\node_modules\\prisma\\build\\index.js", "mcp"],
       "enabled": true
     },
     "postgres": {
       "type": "local",
-      "command": ["npx", "-y", "@modelcontextprotocol/server-postgres", "{env:DATABASE_URL}"],
+      "command": ["C:\\Program Files\\nodejs\\node.exe", "C:\\Users\\horgh\\.config\\opencode\\tools\\postgres-mcp\\node_modules\\@modelcontextprotocol\\server-postgres\\dist\\index.js", "{env:DATABASE_URL}"],
       "enabled": true
     },
     "mongodb": {
       "type": "local",
-      "command": ["npx", "-y", "mongodb-mcp-server@latest", "--readOnly"],
+      "command": ["C:\\Program Files\\nodejs\\node.exe", "C:\\Users\\horgh\\.config\\opencode\\tools\\mongodb-mcp\\node_modules\\mongodb-mcp-server\\dist\\esm\\index.js", "--readOnly"],
       "environment": {
         "MDB_MCP_CONNECTION_STRING": "{env:MDB_MCP_CONNECTION_STRING}"
       },
@@ -171,7 +171,7 @@
     },
     "kubernetes": {
       "type": "local",
-      "command": ["npx", "-y", "kubernetes-mcp-server"],
+      "command": ["C:\\Users\\horgh\\.config\\opencode\\tools\\kubernetes-mcp\\node_modules\\kubernetes-mcp-server-windows-amd64\\bin\\kubernetes-mcp-server-windows-amd64.exe", "--log-file", "stderr"],
       "enabled": true
     },
     "expo": {

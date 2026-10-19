@@ -98,7 +98,8 @@ Load the skills matching the target. Nothing else.
 | Kubernetes | `kubernetes` MCP (needs kubeconfig) |
 | Expo mobile | `expo-overview` first, then `expo-router`, `expo-native-ui`, `expo-data-fetching`, `expo-upgrade`, `eas-app-stores`, `eas-workflows`, `eas-update`, `animate-expo` (+ `expo` MCP) |
 | Tauri desktop | `tauri-v2` |
-| Diagrams / architecture | `excalidraw-diagram` |
+| Diagrams / architecture | `diagram-design` (branded HTML/SVG diagrams), `excalidraw-diagram` |
+| Video / motion output | `hyperframes` first (router — it selects the workflow), then its core set; `pr-to-video` for a PR, `product-launch-video` for a URL, `faceless-explainer` for text, `general-video` for anything else. Needs the `hyperframes` CLI (Node >= 22) |
 | Slow screen / perf issue | `perf-debug` |
 | New DB, console, API keys | `prisma-postgres-setup`, `prisma-postgres` |
 | API design / contract | `api-designer`, `graphql-architect` |
@@ -122,9 +123,12 @@ Load the skills matching the target. Nothing else.
 | Code review | `code-reviewer` (→ `kodus-review` / `/review`) |
 | Docs from diff | `code-documenter` (→ `/document` + living-docs) |
 | Full-stack guardrail | `fullstack-guardian` |
+| Agent process / authoring | `writing-for-agents` (skills + AGENTS.md), `domain-modeling` (GLOSSARY/ADR), `research` (cited notes), `handoff` (session handoff), `retro` (retro on the agent's environment), `grilling` / `grill-me` / `grill-with-docs` (relentless interview), `pr` (PR body), `ask-matt` (skill router) |
 | Later, not day-one (only with that surface) | `kubernetes-specialist`, `terraform-engineer`, `microservices-architect`, `mcp-developer`, `monitoring-expert` |
 
 Bar: match the skill to the repo's ACTUAL pinned versions in `tech_stack.md` — never apply latest idioms to legacy code (adapt down or ask).
+
+User-invoked only (OpenCode `autoinvoke: false`): `ask-matt`, `grill-me`, `grill-with-docs`, `handoff`, `retro`, `prototype` — load them only when the user asks for that flow, never spontaneously.
 
 Ours own the gates (`architecture-designer`→`/architect`, `feature-forge`→`/scope`, `spec-miner`→`/audit`, `debugging-wizard`→`/debug`, `test-master`→`/test`, `code-reviewer`→`kodus-review`/`/review`, `security-reviewer`→Kodus gate, `code-documenter`→`/document` + living-docs) — their content is input/checklist only. Later group: load only when the repo actually has that surface.
 

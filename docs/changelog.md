@@ -1,0 +1,175 @@
+# Changelog
+
+Dated entry per change. Newest first. Every version section corresponds to a
+version published to npm; the commit range under each git tag is the source
+of the entries. Tags are listed with `git tag` and dated with
+`git for-each-ref --sort=creatordate`.
+
+Version 1.0.0 was published to npm but never got a git tag, so it has no tag
+range. The npm publish timestamps are UTC and can sit a day earlier than the
+commit date of the same version.
+
+## [Unreleased]
+
+Working tree changes that are not tagged yet. Snapshot taken 2026-10-20.
+
+### Added
+
+- The installer now installs the local MCP servers as pinned packages under
+  `<config>/tools/` and repoints each entry in `opencode.jsonc` at the copy on
+  the installing machine: `prisma@7.10.1`,
+  `@modelcontextprotocol/server-postgres@0.6.2`, `mongodb-mcp-server@3.1.0`,
+  `kubernetes-mcp-server@0.0.67` (the platform package for the current
+  machine) and `analytics-mcp==0.7.0` in a venv.
+- The skills step resolves a Node runtime of its own, requires Node >= 22.20,
+  and puts it first on `PATH` for the duration of the install loop.
+- The installer mirrors the Claude `disable-model-invocation: true` flag into
+  the OpenCode `metadata.opencode/autoinvoke: "false"` key for 11 user
+  invoked skills, so those skills never fire against the workflow gates.
+- Three more skill sources are installed: `cathrynlavery/diagram-design`,
+  `heygen-com/hyperframes` and `mattpocock/skills`.
+- The repository now carries living docs under `docs/`: changelog, system
+  diagram, targets, roadmap, tech stack and project doc.
+
+### Changed
+
+- `config/opencode.jsonc` runs the local MCP servers from absolute paths
+  instead of `npx` and `pipx run`.
+- `config/.env.example` describes the pinned local installs instead of the
+  `npx` and `pipx run` invocations it used to name.
+- `AGENTS.md` routes `diagram-design` and the HyperFrames set, and lists the
+  agent process skills.
+- `README.md` states 119 skills and adds the diagram, video and agent process
+  rows to the skill table.
+- The `package.json` description skill count was corrected from 94 to 119.
+- The installer copies `.env.example` to `.env` (copy-if-missing) so the
+  `{env:...}` placeholders resolve instead of expanding to empty strings.
+
+### Fixed
+
+- The Kodus team key was removed from the vendored `kodus-review` skill and
+  replaced with a placeholder. It was committed to this repository, so it must
+  be rotated on the Kodus side — deleting the file does not un-leak it.
+- `README.md` no longer claims `files` hygiene in the published tarball; the
+  package has no `files` field and ships everything not gitignored.
+- The installer's usage comment named the package `development-base`.
+
+## [1.2.6] - 2026-10-17
+
+### Fixed
+
+- The `rea` MCP runs as an absolute `node.exe` plus the installed
+  `rea.mjs` instead of being resolved through `npx`.
+
+## [1.2.5] - 2026-10-16
+
+### Changed
+
+- `config/opencode.jsonc` reports 22 MCPs and describes the local v2 plugin
+  ports.
+
+### Fixed
+
+- The DCP plugin restored the synthetic flag on injected parts after the host
+  was verified to keep them out of chat while still sending them to the model.
+- The DCP plugin runtime pin went back to `^1.18.32`.
+- The slim plugin ships `setDefaultAgent: false` and the installer copies that
+  file only when it is missing.
+
+## [1.2.4] - 2026-10-16
+
+### Added
+
+- The vendored DCP plugin picked up upstream fixes: tokenizer, tag cleanup,
+  tool id collisions, argument handling, slash commands, media handling and
+  pending message reset.
+
+## [1.2.3] - 2026-10-16
+
+### Changed
+
+- The design system skill content was refreshed.
+
+## [1.2.2] - 2026-10-16
+
+### Fixed
+
+- The `rea` MCP got the `mcp` subcommand, and the Prisma server was pinned to
+  a local Prisma 7 install.
+
+## [1.2.1] - 2026-10-16
+
+### Changed
+
+- The plugin runtime moved to 1.19 and the installer brings in `pipx` for the
+  analytics MCP.
+
+## [1.2.0] - 2026-10-14
+
+### Added
+
+- The `rea` reverse engineering MCP plus its companion skills.
+
+## [1.1.1] - 2026-10-13
+
+### Added
+
+- A Windows GUI installer built with Inno Setup 6.
+
+### Changed
+
+- The design system skill was refreshed and the agents redesign rule added,
+  taking the skill set to 90.
+
+## [1.1.0] - 2026-10-13
+
+### Added
+
+- All plugins are vendored in the repository, six of them ported to the
+  opencode v2 plugin API.
+
+### Fixed
+
+- `opencode-review` was migrated to the v2 plugin format and the stale npm
+  plugins were dropped.
+- The six ported plugins import a resolvable `@opencode-ai/plugin` path.
+- The review plugin registers its commands through `editor.add`.
+- The synthetic flag on DCP injected parts was reverted after the host was
+  found to drop those parts.
+- The installer vendors the review test, the DCP production dependency and
+  the central fallback dependency.
+- The package description skill count was corrected from 44 to 88.
+
+### Changed
+
+- The README was refreshed for the v2 ports, the installer scope and the
+  known limits.
+
+## [1.0.2] - 2026-10-03
+
+### Added
+
+- The workflow is synced to the global `AGENTS.md`, with 88 skills including
+  the vendored workflow skills.
+
+## [1.0.1] - 2026-09-30
+
+### Added
+
+- The design system, living docs and global `AGENTS.md` rules were added to
+  the repository.
+
+### Fixed
+
+- The config syncs to the global config home, the GCP MCPs are disabled, and
+  the full `.env` template ships.
+
+## [1.0.0] - 2026-09-27
+
+Published to npm without a git tag, from the commit `e43469a`.
+
+### Added
+
+- The first release of the blueprint: one command opencode setup with 21
+  MCPs, 10 plugins, 44 skills, and the Kodus and PR-Agent loops.
+- The npm compatible bin path used for publishing.
