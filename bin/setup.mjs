@@ -295,22 +295,6 @@ const backup = (p) => {
 };
 backup(join(TARGET, "opencode.jsonc"));
 backup(join(TARGET, "AGENTS.md"));
-const cp = (src, dest) => {
-  log(`  copy ${src} -> ${dest}`);
-  if (!DRY) {
-    if (existsSync(dest)) rmSync(dest, { recursive: true, force: true });
-    cpSync(src, dest, { recursive: true });
-  }
-};
-cp(join(REPO, "config", "opencode.jsonc"), join(TARGET, "opencode.jsonc"));
-cp(join(REPO, "AGENTS.md"), join(TARGET, "AGENTS.md"));
-cp(join(REPO, "config", "commands"), join(TARGET, "commands"));
-// The orchestrator agent is a file, not a slim default: with
-// setDefaultAgent=false slim no longer registers the name, and sessions or
-// task sessions that still reference it fail to drain with `Agent not found`.
-// V2 reads agent markdown from `agents/` (plural); the v1 `agent/` directory
-// is ignored, which is why the file used to be missing at runtime.
-//
 // Content comparison that ignores line endings: a Windows checkout can turn
 // LF into CRLF, and that is not a user edit.
 const sameContent = (a, b) =>
@@ -325,7 +309,59 @@ const isFile = (p) => {
     return false;
   }
 };
-
+// Copy a tree over another one, file by file, without deleting what is
+// already there.
+const mergeDir = (src, dest) => {
+  mkdirSync(dest, { recursive: true });
+  for (const entry of readdirSync(src, { withFileTypes: true })) {
+    const from = join(src, entry.name);
+    const to = join(dest, entry.name);
+    if (entry.isDirectory()) mergeDir(from, to);
+    else if (entry.isFile()) copyFileSync(from, to);
+  }
+};
+const cp = (src, dest) => {
+  log(`  copy ${src} -> ${dest}`);
+  if (!DRY) {
+    if (existsSync(dest)) rmSync(dest, { recursive: true, force: true });
+    cpSync(src, dest, { recursive: true });
+  }
+};
+cp(join(REPO, "config", "opencode.jsonc"), join(TARGET, "opencode.jsonc"));
+cp(join(REPO, "AGENTS.md"), join(TARGET, "AGENTS.md"));
+// The commands directory holds the shipped commands and the ones the user
+// wrote. Copy the shipped ones that are missing, keep a tuned file with a
+// backup, and never remove a file this installer did not put there.
+const cpDirIfMissing = (src, dest) => {
+  log(`  copy ${src} -> ${dest} (missing files only)`);
+  if (!DRY) mkdirSync(dest, { recursive: true });
+  for (const entry of readdirSync(src, { withFileTypes: true })) {
+    if (!entry.isFile()) continue;
+    const from = join(src, entry.name);
+    const to = join(dest, entry.name);
+    if (!existsSync(to)) {
+      log(`  copy ${from} -> ${to}`);
+      if (!DRY) copyFileSync(from, to);
+      continue;
+    }
+    if (!isFile(to)) {
+      log(`  keep ${to} (not a regular file; not ours to replace)`);
+      continue;
+    }
+    if (sameContent(to, from)) {
+      log(`  skip ${to} (already current)`);
+      continue;
+    }
+    backup(to);
+    log(`  keep ${to} (you changed it; backed up, not overwritten)`);
+  }
+};
+cpDirIfMissing(join(REPO, "config", "commands"), join(TARGET, "commands"));
+// The orchestrator agent is a file, not a slim default: with
+// setDefaultAgent=false slim no longer registers the name, and sessions or
+// task sessions that still reference it fail to drain with `Agent not found`.
+// V2 reads agent markdown from `agents/` (plural); the v1 `agent/` directory
+// is ignored, which is why the file used to be missing at runtime.
 // Installed per file, copy-if-missing: a tuned agent file survives an
 // install, the same rule the `.env` template follows. A file that differs
 // from the shipped one is kept and backed up, never overwritten.
@@ -500,8 +536,10 @@ for (const name of VENDORED_SKILLS) {
   }
   log(`  copy skills/${name} -> ${dest}`);
   if (!DRY) {
-    if (existsSync(dest)) rmSync(dest, { recursive: true, force: true });
-    cpSync(src, dest, { recursive: true });
+    // Merge over the existing tree instead of deleting it: the shipped files
+    // are versioned content and may be replaced, but a file the user added
+    // to a vendored skill must not disappear without a copy.
+    mergeDir(src, dest);
   }
 }
 

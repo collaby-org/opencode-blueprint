@@ -161,7 +161,20 @@ function main() {
     `<sub>Local review on \`${result.reviewer}\` · author model \`${result.author}\` · level ${result.level} · verdict ${result.verdict} · head \`${head.slice(0, 8)}\` · this comment updates in place</sub>`,
   ].join("\n");
 
-  let body = [MARKER, `<!-- reviewed-head:${head} -->`, note, report, footer].filter(Boolean).join("\n\n");
+  // An incomplete review is not an approval, whatever the verdict field says.
+  // The gate blocks on `complete`, and the comment has to say so too.
+  const incomplete =
+    result.complete === false
+      ? [
+          "> [!WARNING]",
+          "> This review is **incomplete**: not every reviewer reported, or the plan had more chunks than the agent budget. The gate blocks the pull request on this. Re-run `/code-review` and sync again.",
+          "",
+        ].join("\n")
+      : "";
+
+  let body = [MARKER, `<!-- reviewed-head:${head} -->`, note, incomplete, report, footer]
+    .filter(Boolean)
+    .join("\n\n");
   let truncated = false;
   if (body.length > MAX_BODY) {
     body = body.slice(0, MAX_BODY - 1200) + `\n\n> Report truncated at ${MAX_BODY} characters. Full report: ${result.reportRelative}\n`;
