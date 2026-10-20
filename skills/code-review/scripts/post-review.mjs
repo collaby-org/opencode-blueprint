@@ -162,12 +162,17 @@ function main() {
   ].join("\n");
 
   // An incomplete review is not an approval, whatever the verdict field says.
-  // The gate blocks on `complete`, and the comment has to say so too.
+  // The gate blocks on `complete`, and the comment has to say so too, with the
+  // real reason: a plan that outran the budget, or an agent that did not
+  // report.
+  const incompleteReason = result.chunksExceedBudget
+    ? "the plan had more chunks than the agent budget, so the tail chunk never had a reviewer"
+    : `not every reviewer reported (${(result.agents && result.agents.reported) || 0} of ${(result.agents && result.agents.expected) || "?"})`;
   const incomplete =
     result.complete === false
       ? [
           "> [!WARNING]",
-          "> This review is **incomplete**: not every reviewer reported, or the plan had more chunks than the agent budget. The gate blocks the pull request on this. Re-run `/code-review` and sync again.",
+          `> This review is **incomplete**: ${incompleteReason}. The gate blocks the pull request on this. Re-run \`/code-review\` and sync again.`,
           "",
         ].join("\n")
       : "";

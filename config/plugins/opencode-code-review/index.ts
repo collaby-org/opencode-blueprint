@@ -784,9 +784,11 @@ export default define({
         );
       }
       if (state.complete === false) {
+        const reason = state.chunksExceedBudget
+          ? "the plan had more chunks than the agent budget, so the tail chunk never had a reviewer"
+          : `${(state.agents && state.agents.reported) || 0} of ${(state.agents && state.agents.expected) || "?"} reviewer agents reported`;
         throw new Error(
-          `Blocked: the last code review is incomplete (${(state.agents && state.agents.reported) || 0} of ` +
-            `${(state.agents && state.agents.expected) || "?"} reviewer agents reported). ${run} ` +
+          `Blocked: the last code review is incomplete (${reason}). ${run} ` +
             `An incomplete review is not a clean review.`,
         );
       }

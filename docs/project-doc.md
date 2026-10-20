@@ -128,9 +128,11 @@ The constraints that must hold at runtime:
   leaves the file as it was and prints a warning.
 - Files that can hold user values are copied only when missing. `opencode.jsonc`,
   `AGENTS.md` and `plugins/` are versioned content and are overwritten.
-  `commands/` and the vendored skills are merged: the shipped files are written
-  over the existing tree, a file the user changed is kept with a backup, and a
-  file the installer did not put there is never removed.
+  `commands/` is merged: a missing shipped command is written, a command the
+  user changed is kept with a backup, and a command the installer did not put
+  there is never removed. The vendored skills are merged the other way round:
+  the shipped files are versioned content and are replaced, a file the user
+  added to a skill is kept.
 - The skill install runs through the `skills` CLI, which rewrites `SKILL.md`
   on every run. The opt out for user invoked skills is therefore applied
   after every install, and it has to be idempotent.
