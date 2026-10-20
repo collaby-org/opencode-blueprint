@@ -32,9 +32,9 @@ file carries the rules and the pointers.
 4. **Ship.** Push the branch to the remote and open a pull request: a pull
    request that only exists on this machine is not done. Every change lands
    through a new PR — never a direct commit or push to `main`. Fill the PR with
-   evidence and `version: before → after`, sync the review comment, update
-   living docs and the changelog of the folder worked in, in the same commit as
-   the change, then `/document` and `/unslop`. `/check review` is
+   evidence and `version: before → after`, sync the review comment, update the
+   living docs and the changelog of the folder worked in (the same-commit rule
+   is in Docs and versions), then `/document` and `/unslop`. `/check review` is
    an optional single quick read; it never replaces `/code-review`. The bar
    for the review comments is in the PR-Agent preset. Merging is
    the human's decision: never merge unless told. Keep the worktree until
@@ -123,12 +123,8 @@ Apple-clean bar. Full standards live in the `design-system` skill — read
 
 Every codebase with UI carries `design-system/` (root; shared plus per-app in
 a monorepo). At the start of every UI task, read `DESIGN_SYSTEM.md` and the
-`ai/` registry, then follow the `design-system` skill: existing non-empty →
-ADOPT (extend, never replace); explicit substantial redesign → REDESIGN
-(brief → audit → proposal → conflict-resolved replacement); missing/empty →
-GENERATE (ask intent first, TBD over invention). Tokens → primitives →
-components → patterns → pages. Never `@import` design-system CSS across
-package boundaries. Stale system docs are a bug.
+`ai/` registry, then follow the `design-system` skill — it owns the decision
+tree and the boundary rules. Stale system docs are a bug.
 
 ## Data & backend rules
 
@@ -141,15 +137,13 @@ package boundaries. Stale system docs are a bug.
 
 ## Multi-agent rules
 
-One worktree and one branch per task/agent, on the repository's own drive
-(Isolate). Never touch another agent's worktree, branch or uncommitted work.
-Scope check first (`gh pr list`, `gh pr diff <n> --name-only`). Every change
-lands through a pull request (Ship); tags only from the merged commit. Never
-plain `--force`; `--force-with-lease` on your own branch only. Regenerate
-lockfiles, never hand-merge. Worktrees do not isolate ports or databases —
-confirm the port answers your process; no schema experiments on shared DBs.
-Memory (`opencode-mem`) captures durable facts; costs roll into
-`opencode-telemetry`. Unresolved conflict: stop and report.
+One worktree and one branch per task/agent. Never touch another agent's
+worktree, branch or uncommitted work. Scope check first (`gh pr list`, `gh pr
+diff <n> --name-only`). Never plain `--force`; `--force-with-lease` on your own
+branch only. Regenerate lockfiles, never hand-merge. Worktrees do not isolate
+ports or databases — confirm the port answers your process; no schema
+experiments on shared DBs. Memory (`opencode-mem`) captures durable facts;
+costs roll into `opencode-telemetry`. Unresolved conflict: stop and report.
 
 ## Parallel work (always)
 
@@ -163,8 +157,7 @@ and the result against it afterwards: `node ~/.config/opencode/tools/agents-scop
 --write .agents/lanes.json`, `--check`, `--verify --changed <file>,<file>`. The
 tool is installed globally; inside the blueprint repository the same file is
 `bin/agents-scope.mjs`. If it is missing, say so and continue without the
-check — never fake a clean result. The full contract lives in the orchestrator
-agent.
+check. The full contract lives in the orchestrator agent.
 
 ## Reverse engineering (always)
 

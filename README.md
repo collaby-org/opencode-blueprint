@@ -227,8 +227,10 @@ installs the pinned `rea-agents`, `prisma`,
 repoints each MCP at this machine's paths and newest Node >= 20.19 →
 prints your personal checklist.
 
-Every file it writes is written atomically: the copy is staged next to the
-destination and swapped in, so the host never reads a half-written config.
+Every file it writes is written atomically: the copy is staged outside the
+directories the host scans (`<config>/.install-staging`) and renamed over the
+destination in one step, so a reader sees either the old file or the new one,
+never a missing or half-written one.
 
 Then:
 
