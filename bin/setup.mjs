@@ -4,7 +4,7 @@
 //   npx opencode-blueprint            # full install
 //   npx opencode-blueprint --dry-run  # print what would happen
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, copyFileSync, cpSync, rmSync, readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, copyFileSync, cpSync, rmSync, readFileSync, writeFileSync, readdirSync, statSync, lstatSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, dirname, delimiter } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -300,11 +300,14 @@ backup(join(TARGET, "AGENTS.md"));
 const sameContent = (a, b) =>
   readFileSync(a, "utf8").replace(/\r\n/g, "\n") === readFileSync(b, "utf8").replace(/\r\n/g, "\n");
 
-// A path that is not a regular file is never read: reading a directory
-// throws, and an installer that dies half way leaves a broken config home.
-const isFile = (p) => {
+// A path that is not a regular file is never read or written: reading a
+// directory throws, and writing through a link would put the file outside
+// the config home. An installer that dies half way leaves a broken config
+// home, and a link is not ours to replace either.
+const isRegular = (p) => {
   try {
-    return statSync(p).isFile();
+    const stat = lstatSync(p);
+    return stat.isFile() && !stat.isSymbolicLink();
   } catch {
     return false;
   }
@@ -314,11 +317,18 @@ const isFile = (p) => {
 const mergeDir = (src, dest) => {
   // A destination that exists as a file cannot hold the shipped directory:
   // creating it would throw and abort the install half way.
-  if (existsSync(dest) && isFile(dest)) {
+  if (existsSync(dest) && isRegular(dest)) {
     log(`  keep ${dest} (you have a file where the shipped tree needs a directory)`);
     return;
   }
-  mkdirSync(dest, { recursive: true });
+  try {
+    mkdirSync(dest, { recursive: true });
+  } catch {
+    // A path that cannot become a directory (a link, a locked entry) is not
+    // ours to replace: skip it instead of aborting the install.
+    log(`  keep ${dest} (cannot create the directory)`);
+    return;
+  }
   for (const entry of readdirSync(src, { withFileTypes: true })) {
     const from = join(src, entry.name);
     const to = join(dest, entry.name);
@@ -329,7 +339,7 @@ const mergeDir = (src, dest) => {
     if (!entry.isFile()) continue;
     // A destination that is not a regular file is never written: copying into
     // it throws, and one bad entry must not abort the whole install.
-    if (existsSync(to) && !isFile(to)) {
+    if (existsSync(to) && !isRegular(to)) {
       log(`  keep ${to} (not a regular file; not ours to replace)`);
       continue;
     }
@@ -360,7 +370,7 @@ const cpDirIfMissing = (src, dest) => {
       if (!DRY) copyFileSync(from, to);
       continue;
     }
-    if (!isFile(to)) {
+    if (!isRegular(to)) {
       log(`  keep ${to} (not a regular file; not ours to replace)`);
       continue;
     }
@@ -389,7 +399,7 @@ for (const entry of readdirSync(agentsSrc, { withFileTypes: true })) {
   const src = join(agentsSrc, entry.name);
   const dest = join(agentsDest, entry.name);
   if (existsSync(dest)) {
-    if (!isFile(dest)) {
+    if (!isRegular(dest)) {
       log(`  keep ${dest} (not a regular file; not ours to replace)`);
       continue;
     }
@@ -414,7 +424,7 @@ if (existsSync(legacyAgentDir)) {
   const shippedAgent = join(agentsSrc, "orchestrator.md");
   const isShippedCopy =
     legacyEntries.length === 1 &&
-    isFile(legacyFile) &&
+    isRegular(legacyFile) &&
     existsSync(shippedAgent) &&
     sameContent(legacyFile, shippedAgent);
   if (isShippedCopy) {

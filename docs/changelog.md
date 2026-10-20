@@ -41,6 +41,19 @@ commit date of the same version.
 
 ### Fixed
 
+- The installer never writes through a path that is not a regular file and never
+  creates a directory where a user file sits: a shipped command or skill file
+  is written file by file, a file the user changed is kept and backed up, and a
+  file or link in the way is kept with a log instead of aborting the install
+  half way.
+- The report, the pull request comment and the gate message name the real
+  reason a review is incomplete: a plan that outran the agent budget reads
+  differently from an agent that did not report.
+- A duplicate finding keeps the most severe one, so a confident nit can no
+  longer erase a blocker and flip the verdict.
+- A plan whose chunks outran the agent budget records the overshoot, and the
+  reconciler derives it from the plan shape as well, so a chunk without a
+  reviewer can never read as a finished review.
 - The workflow conflicts the audit found: the rebase now happens before the
   review, `/check review` no longer carries Claude-only model detection and
   no longer writes the gate's report path, the Kodus command and the PR-Agent
