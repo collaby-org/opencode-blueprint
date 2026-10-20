@@ -63,29 +63,27 @@ leave a diverged `AGENTS.md` behind. AI never edits it without consent.
 
 ## Docs and versions (always)
 
-Every project carries its own docs home and its own version. Resolve the docs
-home once, before the work starts, and use it for the whole change: the
-repository's `docs/`, the app's `<app>/docs/`, the linked documentation
-repository or vault (`Obsidian-Documentation*`, `Documentation/`, `.docs/`), or
-`.workflow/` when `docs/` is a published site.
+Resolve the docs home once, before the work starts, and use it for the whole
+change: the repository's `docs/`, the app's `<app>/docs/`, the linked
+documentation repository or vault (`Obsidian-Documentation*`,
+`Documentation/`, `.docs/`), or `.workflow/` when `docs/` is a published site.
 
-Versions: every app or workstream that ships on its own (frontend, API, mobile,
-worker) has its own version line, in its own manifest or `docs/VERSION`; none
-→ `1.0.0`. One PR, one bump, on the version line of the folder the PR
-touches: feature or architecture → minor (`1.0.0` → `1.1.0`), fix, docs or
-chore → patch, breaking → major. Every further change while that PR is open
-bumps the patch on that same line (`1.1.1`, `1.1.2` … `1.1.35`). The bump and
-the changelog entry land in the same commit as the change.
+Versions: every app or workstream that ships on its own (frontend, API,
+mobile, worker) has its own version line, in its own manifest or
+`docs/VERSION`; none → `1.0.0`. One PR, one bump, on the version line of the
+folder the PR touches: feature or architecture → minor, fix, docs or chore →
+patch, breaking → major. Every further change while that PR is open bumps the
+patch on that same line. The bump and the changelog entry land in the same
+commit as the change.
 
 Changelog: the entry goes to the changelog of the folder that was worked in —
 `docs/changelog.md` for repo-level work, `<app>/docs/changelog.md` for one app
 in a monorepo, and the resolved docs home when it lives outside the
-repository. Not one global file for everything.
-
-If the resolved docs home is outside the repository, the change updates it as
-well, in the same PR or in a linked PR against that documentation repository;
-the repository copy stays the source of truth and the mirror moves with it. A
-change that edited code and left the resolved docs home untouched is not done.
+repository. Not one global file for everything. If the resolved docs home is
+outside the repository, the change updates it as well, in the same PR or in a
+linked PR against that documentation repository; the repository copy stays the
+source of truth and the mirror moves with it. A change that edited code and
+left the resolved docs home untouched is not done.
 
 End of PR and every pause: that folder's changelog, the roadmap, the spec
 status, the decisions. Tag `v<version>` only from the merged commit. Full
@@ -143,20 +141,15 @@ package boundaries. Stale system docs are a bug.
 
 ## Multi-agent rules
 
-One worktree and one branch per task/agent, on the same drive as the
-repository (`D:\Work\worktrees\<repo>\<branch>` for a repository on `D:`) —
-never on the system drive (C:) unless the repository itself lives there,
-never inside the repository's own location; never touch another agent's
-worktree, branch, or uncommitted work. Scope check first (`gh pr list`, `gh pr
-diff <n> --name-only`). Every change lands through a new pull request: never
-commit or push directly to `main` — branch → push → PR → review → merge.
-Push the branch: a pull request that only exists on this machine is not
-done. Merging is the human's decision; tags only from the merged
-commit. Never plain `--force`; `--force-with-lease` on your own branch only.
-Regenerate lockfiles, never hand-merge. Worktrees do not
-isolate ports or databases — confirm the port answers your process; no schema
-experiments on shared DBs. Memory (`opencode-mem`) captures durable facts;
-costs roll into `opencode-telemetry`. Unresolved conflict: stop and report.
+One worktree and one branch per task/agent, on the repository's own drive
+(Isolate). Never touch another agent's worktree, branch or uncommitted work.
+Scope check first (`gh pr list`, `gh pr diff <n> --name-only`). Every change
+lands through a pull request (Ship); tags only from the merged commit. Never
+plain `--force`; `--force-with-lease` on your own branch only. Regenerate
+lockfiles, never hand-merge. Worktrees do not isolate ports or databases —
+confirm the port answers your process; no schema experiments on shared DBs.
+Memory (`opencode-mem`) captures durable facts; costs roll into
+`opencode-telemetry`. Unresolved conflict: stop and report.
 
 ## Parallel work (always)
 
@@ -219,10 +212,6 @@ exist before checking `.github/workflows/`.
 
 ## Completing a task
 
-Load the `ship` skill for the full end-of-task protocol. Gates in order:
-`/scope` → `/audit` (HUMAN-ONLY) → `/architect` spec → `/develop` → repo
-checks (`/test`, `/debug`) → evidence (`/check verify`, `before-and-after`) →
-Kodus → commit → rebase → `/code-review` → push/PR → sync review comment →
-living docs + changelog → `/document` → `/unslop` → PR-Agent + Kodus to zero
-→ present URL. `/check review` is optional and never replaces the gate.
+Load the `ship` skill for the full end-of-task protocol; the four beats above
+are its order. `/check review` is optional and never replaces the gate.
 `/sync` and `/audit` are HUMAN-ONLY and never auto-chained.
