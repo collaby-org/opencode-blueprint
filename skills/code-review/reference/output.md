@@ -83,7 +83,7 @@ Rules:
   The summary is the review record. If inline comments are ever needed, they
   must be validated against the PR diff at post time, not the local worktree.
 - **No secrets**: `post-review.mjs` redacts private key blocks, common token
-  prefixes, JWTs, and `KODE_TEAM_KEY` style assignments before posting. The
+  prefixes, JWTs, and `KODUS_TEAM_KEY` style assignments before posting. The
   report is also local, so nothing leaves the machine until `--apply`.
 - **Bounded**: bodies over 60,000 characters are truncated with a pointer to
   the local report.
