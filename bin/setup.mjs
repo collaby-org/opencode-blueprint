@@ -451,13 +451,19 @@ const stageDir = (dest) => {
   try {
     for (const entry of readdirSync(STAGING_ROOT, { withFileTypes: true })) {
       if (!entry.isDirectory() || !entry.name.startsWith("stage-")) continue;
-      const dir = join(STAGING_ROOT, entry.name);
-      const ownerFile = join(dir, "owner.pid");
-      const owner = Number(readFileSync(ownerFile, "utf8").trim());
-      const age = Date.now() - statSync(dir).mtimeMs;
-      const live = Number.isFinite(owner) && owner > 0 && pidAlive(owner);
-      if (live || age < STALE_STAGE_MS) continue;
-      rmSync(dir, { recursive: true, force: true });
+      // Each entry is judged on its own: one unreadable owner must not stop the
+      // sweep of the rest.
+      try {
+        const dir = join(STAGING_ROOT, entry.name);
+        const ownerFile = join(dir, "owner.pid");
+        const owner = Number(readFileSync(ownerFile, "utf8").trim());
+        const age = Date.now() - statSync(dir).mtimeMs;
+        const live = Number.isFinite(owner) && owner > 0 && pidAlive(owner);
+        if (live || age < STALE_STAGE_MS) continue;
+        rmSync(dir, { recursive: true, force: true });
+      } catch {
+        // An entry that cannot be read is left alone.
+      }
     }
   } catch {
     // Nothing to sweep.
@@ -1235,10 +1241,16 @@ log(`
   4. Restart opencode (config is loaded once at startup).
   5. Per repo: run /pr-agent-setup once (adds PR-Agent Action; set OPENAI_KEY secret).
 `);
-// The staging area is scratch space: it does not outlive the run.
-try {
-  rmSync(STAGING_ROOT, { recursive: true, force: true });
-} catch {
-  // Another install may be using it.
+// The staging area is scratch space: it does not outlive the run. The root is
+// only removed when it is empty, so a second install running now keeps its
+// own staging area, and a dry run touches nothing.
+if (!DRY) {
+  try {
+    if (readdirSync(STAGING_ROOT).length === 0) {
+      rmSync(STAGING_ROOT, { recursive: true, force: true });
+    }
+  } catch {
+    // Another install may be using it.
+  }
 }
 log(DRY ? "DRY RUN - nothing executed." : "Done.");

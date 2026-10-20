@@ -1,5 +1,11 @@
 # Layout Engine Reference
 
+> **Scope:** reference material only. The engine that ships in `SKILL.md` and
+> `template.md` implements the **radial** layout, and the code that runs is in
+> `template.md`. The other three modes below need the host that can render an
+> artifact; on this host every map is a file in the repository, so a `.jsx` map
+> uses the radial engine that ships with it.
+
 The mind map supports four layout modes. The engine auto-selects based on content shape,
 but the user can force a mode by setting `layout` in `mindmapData` or by asking
 ("make it a tree", "use flow layout", "switch to radial").

@@ -154,7 +154,8 @@ worktree and one owner — a shared type, a schema, a generated file, a lockfile
 or a migration gets a single owner who lands it first — and let read-only
 lanes overlap freely. Write the scope manifest and check it before dispatching
 and the result against it afterwards: `node ~/.config/opencode/tools/agents-scope.mjs
---write .agents/lanes.json`, `--check`, `--verify --changed <file>,<file>`. The
+--write .agents/lanes.json`, `--check .agents/lanes.json`,
+`--verify .agents/lanes.json --changed <file>,<file>`. The
 tool is installed globally; inside the blueprint repository the same file is
 `bin/agents-scope.mjs`. If it is missing, say so and continue without the
 check. The full contract lives in the orchestrator agent.
@@ -219,4 +220,4 @@ exist before checking `.github/workflows/`.
 ## Completing a task
 
 Load the `ship` skill for the full end-of-task protocol; the four beats above
-are its order. `/check review` is optional and never replaces the gate.
+are its order.

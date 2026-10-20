@@ -75,6 +75,12 @@ commit date of the same version.
 - Parallel work leans sequential by default: most coding work has fewer
   independent units than research, and a multi-agent run costs far more. The
   lane count scales with the partition, and a shared artifact has one owner.
+- `AGENTS.md` states each rule once: the worktree location, the pull request
+  rule, the tag rule, the same-commit rule and the design-system tree live in
+  the section that owns them, and the rest point at it.
+- Reverse engineering output belongs to the project: every artifact of a
+  session lands in `reversed-engineered/<name>/`, one folder per target, never
+  in a temp directory and never loose in the repository root.
 
 ## [1.4.0] - 2026-10-20
 

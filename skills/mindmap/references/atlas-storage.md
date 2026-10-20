@@ -21,13 +21,15 @@ full data structure plus metadata.
 // Save a map
 const slug = mindmapData.central.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 const mapKey = `maps:${slug}`;
+const existing = window.localStorage.getItem(mapKey);
+const now = new Date().toISOString();
 window.localStorage.setItem(mapKey, JSON.stringify({
   data: mindmapData,        // the full mindmapData object
   palette: palName,         // which palette was active
   layout: "radial",         // which layout mode
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
-  tags: [],                 // user-defined tags for filtering
+  createdAt: existing ? JSON.parse(existing).createdAt : now, // kept across saves
+  updatedAt: now,
+  tags: existing ? JSON.parse(existing).tags : [], // user-defined tags for filtering
 }));
 
 // Load a map
