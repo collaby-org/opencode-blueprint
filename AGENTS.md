@@ -166,6 +166,14 @@ tool is installed globally; inside the blueprint repository the same file is
 check — never fake a clean result. The full contract lives in the orchestrator
 agent.
 
+## Reverse engineering (always)
+
+Every artifact of a reverse engineering session lands in the project being
+worked on, under `reversed-engineered/<name>/` — the extracted files, the
+notes and the scripts together, one folder per target. Never in a temp
+directory, never loose in the repository root, never outside the project. The
+REA MCP writes there too. Full convention: `docs/conventions.md`.
+
 ## Disk hygiene (always)
 
 Keep the system drive above ~15 GB free; ten sessions may be running at once,
