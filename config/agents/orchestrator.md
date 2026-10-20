@@ -30,36 +30,52 @@ don't stall on decisions you can make and revisit.
 
 ## Parallel work
 
-Use as many lanes as the work needs — the limit is the size of the partition,
-not the number of agents. What makes parallel work safe is that no two
-*writers* ever own the same path.
+Use as many lanes as the work needs — but lean sequential by default. Most
+coding work has fewer truly independent units than research, and a multi-agent
+run costs far more tokens than one agent with tools. Parallelise when the
+change genuinely partitions; otherwise one lane, one brief, one result.
 
-- **Partition before dispatch.** Cut the change into work units. A unit is a
-  set of paths one lane owns end to end: a service, a package, a feature area,
-  a document. Name the unit, its owner and its paths.
-- **One owner per path.** Two write lanes that share a path are a conflict,
-  not a collaboration. Split the unit, or run the lanes in sequence. Read-only
-  lanes (@explorer, a reviewer, a test run) may overlap freely: they never
-  write.
-- **One lane, one worktree.** Every write lane works in its own worktree and
-  branch. The integration point is the pull request, never a shared working
-  tree.
-- **Waves for dependencies.** Independent units run in the same wave; a unit
-  that depends on another runs in the next one. State the wave and the
-  dependency in the dispatch.
+- **Scale the effort to the change.** A small or single-area change is one
+  lane. Parallel lanes start at three or four writers; past five the review
+  capacity, not the compute, is the limit.
+- **Partition before dispatch.** Cut the change into work units: a service, a
+  package, a feature area, a document. A unit is a set of paths one lane owns
+  end to end.
+- **One owner per path.** Two lanes that write the same path are a conflict,
+  not a collaboration. Read-only lanes (recon, a review, a test run) may
+  overlap freely: they never write.
+- **One shared owner for the shared artifacts.** A type other lanes import, a
+  schema, a generated file, a lockfile, a migration, an index barrel: one lane
+  owns it and lands it first. The lanes that depend on it run in the next
+  wave.
+- **One lane, one worktree.** Every writing lane works in its own worktree
+  and branch. The integration point is the pull request, never a shared
+  working tree.
+- **Brief it properly.** Every dispatch names the objective, the paths, the
+  outputs (which files will exist afterwards) and who validates them. A
+  one-line brief makes two lanes do the same search.
 - **Prove it, do not assume it.** Write the scope manifest and check it
-  before dispatching:
+  before dispatching, and check the result against it afterwards:
 
   ```
-  node bin/agents-scope.mjs --write .agents/lanes.json    # template
-  node bin/agents-scope.mjs --check .agents/lanes.json     # exit 1 on a conflict
+  node bin/agents-scope.mjs --write .agents/lanes.json     # template
+  node bin/agents-scope.mjs --check .agents/lanes.json      # exit 1 on a conflict
+  node bin/agents-scope.mjs --verify .agents/lanes.json --changed <file>,<file>
   ```
 
-  The check fails when two write lanes claim the same path, when a path
-  escapes the repository, or when a write lane has no scope. Fix the manifest
-  before spawning anything.
-- **Keep the ledger.** Lanes, owners, paths, status. Reconcile the writers,
-  then run the full suite once yourself.
+  The first check fails when two writing lanes claim one path, when a path
+  leaves the repository, when a dependency does not exist, or when a writing
+  lane has no scope. The second fails when a file changed outside every
+  lane's claim. Fix the plan before spawning anything.
+- **Integrate in waves.** Land the contract lanes, rebase the remaining lanes
+  on what landed, rerun their focused checks, then run the full suite once
+  yourself. A dry-run merge before a real one keeps a conflict small and
+  attributable.
+- **Do not** resolve a conflict with `--ours` or `--theirs`, run formatters,
+  generators or dependency installers in two lanes at once, or hand-merge a
+  lockfile — regenerate it.
+- **Keep the ledger.** Lanes, owners, paths, outputs, status. Reconcile the
+  writers, then validate once.
 
 ## Workflow
 

@@ -207,7 +207,7 @@ const replaceMcpCommand = (cfgPath, key, nextArgs) => {
   if (!Array.isArray(cmd) || JSON.stringify(cmd) !== JSON.stringify(nextArgs)) {
     throw new Error(`refusing to write ${cfgPath}: "${key}.command" would be ${JSON.stringify(cmd)}, expected ${JSON.stringify(nextArgs)}`);
   }
-  writeFileSync(cfgPath, next);
+  writeTextAtomic(cfgPath, next);
   return cmd;
 };
 
@@ -298,7 +298,7 @@ const patchAutoinvoke = (file) => {
   if (patched === text) return "already-patched";
   if (!DRY) {
     try {
-      writeFileSync(file, patched);
+      writeTextAtomic(file, patched);
     } catch {
       // A read-only or locked skill file keeps its content: the mirror is
       // cosmetic, never worth an aborted install.
@@ -487,6 +487,22 @@ const copyTreeAtomic = (from, to) => {
   try {
     cpSync(from, staged, { recursive: true });
     swapIn(staged, to);
+    return true;
+  } finally {
+    rmSync(stage, { recursive: true, force: true });
+  }
+};
+// Write text into a file atomically: stage it next to the destination and
+// swap it in. A truncate-write leaves a window in which the host reads an
+// empty file — and an empty opencode.jsonc takes every plugin, MCP and agent
+// with it. This is the path the MCP repoint takes, so it matters as much as
+// the copy.
+const writeTextAtomic = (to, text) => {
+  const stage = stageDir(to);
+  const tmp = join(stage, "file");
+  try {
+    writeFileSync(tmp, text);
+    swapIn(tmp, to);
     return true;
   } finally {
     rmSync(stage, { recursive: true, force: true });
@@ -804,7 +820,7 @@ centralPkg.dependencies = {
 };
 if (!DRY) {
   try {
-    writeFileSync(centralPkgPath, JSON.stringify(centralPkg, null, 2) + "\n");
+    writeTextAtomic(centralPkgPath, JSON.stringify(centralPkg, null, 2) + "\n");
   } catch {
     log(`  keep ${centralPkgPath} (cannot be written)`);
   }

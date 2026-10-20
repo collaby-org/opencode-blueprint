@@ -1,10 +1,10 @@
 # Persistent Storage & Atlas
 
-> **Scope:** reference material only. The published Knowledge Atlas needs the
-> `Artifact` and `ArtifactData` tools, which this host does not have, so a map
-> here is a file in the repository. What follows describes the browser-storage
-> fallback the interactive build uses, and the atlas for a host that can
-> publish pages.
+> **Scope:** reference material only — do not follow this workflow on this host. The
+> published Knowledge Atlas needs the `Artifact` and `ArtifactData` tools, which
+> opencode does not have, so a map here is a file in the repository. What
+> follows describes the browser-storage fallback the interactive build uses, and
+> the atlas for a host that can publish pages.
 
 Mind maps can persist across sessions using the `window.storage` API. This enables
 a personal knowledge atlas — a collection of linked maps that grows over time.

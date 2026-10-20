@@ -1,31 +1,113 @@
-# OpenCode Blueprint
+<p align="center">
+  <img src="docs/media/hero.svg" alt="opencode-blueprint: one command, a complete opencode environment" width="100%">
+</p>
 
-> One command. A complete, opinionated, production-grade [opencode](https://opencode.ai)
-> environment - **22 MCPs, 11 plugins, 123 skills, a global agent workflow,**
-> and **Kodus + PR-Agent** review loops. Built for teams shipping
-> Apple-clean, award-worthy software.
+<p align="center">
+  <a href="https://www.npmjs.com/package/opencode-blueprint"><img alt="npm version" src="https://img.shields.io/npm/v/opencode-blueprint?style=flat-square&labelColor=111A31&color=5B8CFF"></a>
+  <a href="https://www.npmjs.com/package/opencode-blueprint"><img alt="npm downloads" src="https://img.shields.io/npm/dm/opencode-blueprint?style=flat-square&labelColor=111A31&color=2EE6A8"></a>
+  <a href="https://github.com/collaby-org/opencode-blueprint/actions/workflows/ci.yml"><img alt="ci" src="https://github.com/collaby-org/opencode-blueprint/actions/workflows/ci.yml/badge.svg"></a>
+  <img alt="review gate: cross model" src="https://img.shields.io/badge/review%20gate-cross--model-7C5BFF?style=flat-square&labelColor=111A31">
+  <img alt="node" src="https://img.shields.io/badge/node-%3E%3D%2022.20-2EE6A8?style=flat-square&labelColor=111A31">
+  <a href="LICENSE"><img alt="license MIT" src="https://img.shields.io/badge/license-MIT-5B8CFF?style=flat-square&labelColor=111A31"></a>
+</p>
+
+<p align="center">
+  <em>One command. A complete, opinionated, production-grade
+  <a href="https://opencode.ai">opencode</a> environment — with a cross-model
+  review gate that blocks the pull request until a reviewer on another model
+  has read the diff.</em>
+</p>
 
 ```bash
 npx opencode-blueprint
 ```
 
-Restart opencode. Create any folder. Start coding.
+<p align="center">Restart opencode. Create any folder. Start coding.</p>
 
 ---
+
+## What you get
+
+<!-- stats:start -->
+
+- **20** Vendored skills — the workflow, the standards and the mind map
+- **18** Skill sources — 85 named skills, the rest whole repositories
+- **22** MCP servers — live access
+- **11** Plugins — local plus the slim bundle
+- **3** Commands — global, in any project
+- **1** Agents — the orchestrator
+- **4** CI workflows — pinned to commit SHAs
+- **14** Repo templates — the baseline every repo gets
+- **v1.4.3** Version — published to npm
+
+<!-- stats:end -->
 
 ## Why this exists
 
 Setting up an AI coding environment used to mean weeks of trial and error:
 which MCP servers, which plugins conflict, which skills are actually S-rank,
 how to wire review loops so nothing sloppy ever merges. This repo is the
-finished answer — researched, de-duplicated, and verified working together:
+finished answer — researched, de-duplicated, and verified working together.
 
 - **No conflicts.** Every orchestrator, memory, and design overlap was
   researched and resolved to a single best-of-breed pick.
 - **Only proven pieces.** S-rank skills, official vendor integrations,
   high-traction community plugins.
 - **A workflow with teeth.** Isolate → Build → Prove → Ship, with a Kodus
-  loop gating every commit and PR-Agent gating every merge.
+  loop gating every commit and a cross-model gate in front of every pull
+  request.
+
+## The workflow
+
+<img src="docs/media/workflow.svg" alt="Four beats: Isolate, Build, Prove, Ship, and the gate that closes each one" width="100%">
+
+1. **Isolate** — a fresh worktree per feature, on the repository's own drive
+   (established projects; skipped for new apps and migrations); `/scope` first
+   for new builds and migrations, `/audit` human-only when the context is
+   stale.
+2. **Build** — `/develop` plus `code-structure` and the stack skills,
+   `design-system` for UI; `/architect` writes the spec first when a decision
+   is owed; `/debug` anytime.
+3. **Prove** — runtime evidence (before/after) and `/check verify` against the
+   spec, `/test` owns the suite; then the **Kodus loop** on the staged diff,
+   commit, rebase on `origin/main`, rerun the checks, and **`/code-review`**
+   (cross model, confidence gated) on the final HEAD.
+4. **Ship** — push the branch, open the pull request with evidence and
+   `version: before → after`, `/document`, `/unslop` the prose, **PR-Agent +
+   Kodus at zero** (`/sync` human-only, never auto-chained). The merge is
+   yours.
+
+Design bar: Apple-clean, invisible motion (`transform`/`opacity`, <300ms,
+springs, reduced-motion honored), full UI states, dark mode from day one.
+
+### The review gate
+
+`/code-review` is not advice. The `opencode-code-review` plugin reads the
+review artifact and **blocks `gh pr create`** until a complete review of the
+exact commit exists, produced by reviewers on a different model family than
+the author, at confidence ≥ 80, chunked for a 200k window, findings only. The
+report lands on the pull request as one comment that updates in place. Three
+escapes exist, all deliberate: a draft pull request, `enforce_pr_gate: false`
+in `.opencode/review.json`, and `CODE_REVIEW_SKIP=1` for a single command.
+
+### Running many agents without stepping on each other
+
+The orchestrator partitions a change into work units, gives every writer one
+path set, one worktree and one owner, and proves the plan before it spawns
+anything:
+
+```bash
+node bin/agents-scope.mjs --write .agents/lanes.json                 # template
+node bin/agents-scope.mjs --check .agents/lanes.json                  # conflicts
+node bin/agents-scope.mjs --verify .agents/lanes.json --changed a.js  # after
+```
+
+The check fails on two writing lanes claiming one path, a path outside the
+repository, a dependency that does not exist, or a writer with no scope; the
+verification fails when a lane changed a file it did not claim. Shared
+artifacts — a type other lanes import, a schema, a generated file, a
+lockfile, a migration — get one owner who lands them first, and the lanes
+that depend on them run in the next wave.
 
 ## What's inside
 
@@ -36,7 +118,7 @@ finished answer — researched, de-duplicated, and verified working together:
 | Project & code | `notion`, `github`, `figma`, `sentry` |
 | Docs & design | `context7`, `lucide-animated`, `expo` |
 | Data | `supabase`, `prisma`, `postgres`, `mongodb`, `redis` |
-| Cloud & infra | `gcp-bigquery`, `gcp-compute`, `gcp-gke`, `gcp-run`, `gcp-storage`, `cloudflare`, `kubernetes` |
+| Cloud & infra | `gcp-bigquery`, `gcp-compute`, `gcp-k8s`, `gcp-run`, `gcp-storage`, `cloudflare`, `kubernetes` |
 | Payments & analytics | `stripe`, `google-analytics` |
 | Reverse engineering | `rea` (pinned `rea-agents@6.5.0`; binaries, JS/Electron, .NET, APKs, firmware — needs provider tools for deep native work) |
 
@@ -55,7 +137,7 @@ finished answer — researched, de-duplicated, and verified working together:
 |---|---|
 | `oh-my-opencode-slim` | 7-agent orchestration (the one orchestrator — swarm/micode/OAC intentionally excluded) |
 | `opencode-mem` (local path) | Automatic long-term memory with vector recall — local wrapper with its own complete deps (the npm cache install came out incomplete, missing `@libsql/client`) |
-| `opencode-dcp` (local vendored copy) | Context pruning (pairs with memory, not against it) — vendored from `@tarquinen/opencode-dcp@3.2.0` with `<dcp-system-reminder>` blocks relocated into `event.system` instead of rendering as chat bubbles (a `synthetic`-flag experiment was reverted after the 2.0.24 host proved to drop `synthetic` parts from model context), pending upstream [#608](https://github.com/Opencode-DCP/opencode-dynamic-context-pruning/issues/608) |
+| `opencode-dcp` (local vendored copy) | Context pruning (pairs with memory, not against it) — vendored from `@tarquinen/opencode-dcp@3.2.0` with `` blocks relocated into `event.system` instead of rendering as chat bubbles (a `synthetic`-flag experiment was reverted after the 2.0.24 host proved to drop `synthetic` parts from model context), pending upstream [#608](https://github.com/Opencode-DCP/opencode-dynamic-context-pruning/issues/608) |
 | `opencode-review` | `/review` command + `review` / `review:fixer` agents with dimension prompts (local install — not on npm; the idle auto-trigger has no v2 hook and stays unwired) |
 | `opencode-code-review` (local) | Mandatory local review gate: `/code-review` command + `code-review` agent + a `gh pr create` hook that blocks until a complete cross-model review of HEAD passes |
 | `opencode-telemetry` (local port) | Local cost/usage telemetry — `/telemetry-report` + `/telemetry-inspect` over a local file store (no sqlite, no npm) |
@@ -70,8 +152,8 @@ finished answer — researched, de-duplicated, and verified working together:
 > `envsitter-guard` (`.env` guard), `opencode-log-sanitizer`,
 > `opencode-command-inject`. Nothing from the npm set remains removed.
 >
-> Ported to the opencode v2 plugin API (`Plugin.define({ id, setup })`,
-> verified against the 2.0.24 host): imports use the resolvable
+> Ported to the opencode v2 plugin API (`Plugin.define({ id, setup })`),
+> verified against the 2.0.24 host: imports use the resolvable
 > `@opencode-ai/plugin/v2/promise` subpath (the bare `@opencode/plugin`
 > root does not resolve in the Bun loader — first boot after install
 > must be a **full** restart, killing the `opencode-cli` sidecar too,
@@ -93,7 +175,7 @@ finished answer — researched, de-duplicated, and verified working together:
 > there registers nothing. The file loads with the config, before plugins, so
 > the name exists when a restored session drains.
 
-### Skills (120) - stack knowledge
+### Skills — stack knowledge
 
 | Stack | Skills |
 |---|---|
@@ -105,8 +187,9 @@ finished answer — researched, de-duplicated, and verified working together:
 | Design (all S-rank) | `apple-design`, `animate`, `animate-expo`, `animation-vocabulary`, `animation-performance`, `emil-design-eng`, `review-animations`, `improve-animations`, `find-animation-opportunities`, `pick-ui-library`, `prototype`, `design-taste-frontend`, `impeccable`, `shadcn`, `ask-sonner`, `mobile-native`, `break-ui` |
 | Workflow | `new-feature`, `code-structure`, `evidence-driven-testing`, `before-and-after`, `unslop`, `perf-debug` |
 | Local review gate | `code-review` (cross model, chunked, confidence gated; `code-reviewer` remains the review input skill) |
+| Repository standards | `repo-standards` (the baseline every repo gets: `AGENTS.md`, `CONTRIBUTING.md`, `CLAUDE.md`, PR template, issue forms, CODEOWNERS, dependabot, SECURITY, pinned CI and a secret scan) |
 | Diagrams / architecture | `diagram-design` (45 diagram types, branded HTML/SVG), `excalidraw-diagram` |
-| Mind maps | `mindmap` (Markmap `.md` in the docs home, interactive React `.jsx` on request) |
+| Mind maps | `mindmap` (a Markmap `.md` in the docs home, the interactive React `.jsx` on request) |
 | Video / motion output | `hyperframes` (router) + `hyperframes-core`, `hyperframes-animation`, `hyperframes-audio`, `hyperframes-cli`, `hyperframes-creative`, `hyperframes-keyframes`, `hyperframes-registry`, `hyperframes-studio`, `media-use`, `general-video`, `product-launch-video`, `faceless-explainer`, `pr-to-video` |
 | Agent process / authoring | `writing-for-agents`, `domain-modeling`, `research`, `handoff`, `retro`, `grilling`, `grill-me`, `grill-with-docs`, `ask-matt` (skill router), `pr` (PR body) |
 | API design / contract | `api-designer`, `graphql-architect` |
@@ -126,16 +209,6 @@ finished answer — researched, de-duplicated, and verified working together:
 | Gate inputs (commands own the gate) | `code-review` → `/code-review`, `architecture-designer` → `/architect`, `feature-forge` → `/scope`, `spec-miner` → `/audit`, `debugging-wizard` → `/debug`, `code-reviewer` → review, `code-documenter` → `/document`, `fullstack-guardian` |
 | Later (surface-gated) | `kubernetes-specialist`, `terraform-engineer`, `microservices-architect`, `mcp-developer`, `monitoring-expert` |
 
-### The workflow (`AGENTS.md`, installed globally)
-
-1. **Isolate** — fresh worktree per feature (established projects; skipped for new apps/migrations); `/scope` first for new builds/migrations, `/audit` human-only when context stale.
-2. **Build** — `/develop` (+ `code-structure` + stack skills, `design-system` for UI); → `/architect` spec when a decision is owed; `/debug` anytime.
-3. **Prove** — runtime evidence (before/after) + `/check verify` vs spec, `/test` owns the suite; then the **Kodus loop** on the staged diff, commit, rebase on `origin/main`, rerun the checks, and **`/code-review`** (cross model, confidence gated) on the final HEAD.
-4. **Ship** — `/code-review` synced to the PR, `/check review`, PR with evidence, `/document`, `/unslop` prose, **PR-Agent + Kodus at zero** (`/sync` human-only, never auto-chained).
-
-Design bar: Apple-clean, invisible motion (`transform`/`opacity`, <300ms,
-springs, reduced-motion honored), full UI states, dark mode from day one.
-
 ## Quickstart — new machine
 
 ```bash
@@ -146,18 +219,24 @@ The installer: checks prerequisites → backs up your existing config →
 copies `opencode.jsonc` + `AGENTS.md` + commands + `.env.example` starter →
 copies all 10 local plugin trees and installs each one's deps (plus the
 central `@opencode-ai/plugin` fallback the loader resolves against) →
-installs all 123 skills globally (registry via `skills add`, 17 workflow
-skills vendored from `skills/`) → installs the Kodus CLI
-and `redis-mcp-server` → installs the pinned `rea-agents`, `prisma`,
+installs every skill globally (registry via `skills add`, the workflow skills
+vendored from `skills/`) → installs the Kodus CLI and `redis-mcp-server` →
+installs the pinned `rea-agents`, `prisma`,
 `@modelcontextprotocol/server-postgres`, `mongodb-mcp-server`,
 `kubernetes-mcp-server` and `analytics-mcp` under `<config>/tools/` and
 repoints each MCP at this machine's paths and newest Node >= 20.19 →
 prints your personal checklist.
 
+Every file it writes is written atomically: the copy is staged next to the
+destination and swapped in, so the host never reads a half-written config.
+
 Then:
 
 1. `gh auth login` · `kodus auth login` (or `KODUS_TEAM_KEY`).
-2. Set env vars (see `config/.env.example`).
+2. Set env vars (see `config/.env.example`). `GITHUB_TOKEN` and
+   `SENTRY_ACCESS_TOKEN` are header credentials on remote servers: they belong
+   in the environment that starts opencode, not in the `.env` file, which only
+   feeds the wrapped local servers.
 3. Restart opencode — config loads once at startup.
 4. Per repo, once: `/pr-agent-setup` (scaffolds the PR-Agent Action;
    key stored as GitHub secrets, never in files).
@@ -231,10 +310,13 @@ the installer needs — so do not put a credential in a tracked file.
 | `AGENTS.md` | Global workflow (source of truth) |
 | `config/opencode.jsonc` | 22 MCPs (5 GCP remotes disabled — no dynamic client registration) · 1 npm + 10 local plugins · instructions |
 | `config/commands/` | `/pr-agent`, `/pr-agent-setup`, `/kodus-review` (plus `/code-review`, registered by the `opencode-code-review` plugin) |
+| `config/agents/` | The `orchestrator` agent, installed to `~/.config/opencode/agents/` |
 | `config/plugins/` | 10 local plugin trees: `opencode-review`, `opencode-code-review`, `opencode-mem` (wrapper), `opencode-dcp` (vendored 3.2.0), + 6 v2 ports (github-release, telemetry, envsitter-guard, log-sanitizer, command-inject, ralph-wiggum) |
-| `skills/` | 17 vendored workflow skills (rest via installer registry list) |
+| `skills/` | The vendored workflow skills, the `repo-standards` baseline and the `mindmap` skill (the rest come from the installer registry list) |
 | `config/.env.example` | Required env vars (values never committed) |
 | `bin/setup.mjs` | The installer |
+| `bin/agents-scope.mjs` | The parallel dispatch check: scope conflicts, dependencies, waves, and what a lane actually changed |
+| `bin/readme-stats.mjs` | The numbers in this README, counted from the repository |
 | `bin/clean.mjs` | Disk reclamation: report by default; `--apply` deletes package-manager caches and day-old review scratch, never the plugin tree or worktree `node_modules` |
 
 ## Contributing
@@ -250,6 +332,7 @@ MIT — see [LICENSE](LICENSE).
 ## Acknowledgments
 
 Workflow adapted from [michaelshimeles/skills](https://github.com/michaelshimeles/skills/blob/main/AGENTS.md).
+Mind maps from [0x-man/mindmap-skill](https://github.com/0x-man/mindmap-skill) (MIT).
 Design craft: [Emil Kowalski](https://github.com/emilkowalski/skills),
 [Leonxlnx](https://github.com/Leonxlnx/taste-skill),
 [Impeccable](https://impeccable.style), [shadcn](https://ui.shadcn.com).

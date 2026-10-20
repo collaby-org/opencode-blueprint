@@ -215,15 +215,15 @@ export default function MindMap() {
   async function handleSave() {
     var key = "maps:" + slug;
     var existing = null;
-    try { existing = await window.storage.get(key); } catch(e) {}
+    try { existing = window.localStorage.getItem(key); } catch(e) {}
     var now = new Date().toISOString();
     var record = {
       data: mindmapData, palette: palName, layout: "radial",
-      createdAt: existing ? JSON.parse(existing.value).createdAt : now,
+      createdAt: existing ? JSON.parse(existing).createdAt : now,
       updatedAt: now, tags: existing ? JSON.parse(existing.value).tags : [],
     };
     try {
-      await window.storage.set(key, JSON.stringify(record));
+      window.localStorage.setItem(key, JSON.stringify(record));
       setSaveMsg(existing ? "Updated ✓" : "Saved ✓");
     } catch(e) { setSaveMsg("Error"); }
     setTimeout(function() { setSaveMsg(null); }, 2000);

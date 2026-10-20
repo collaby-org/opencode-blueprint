@@ -160,16 +160,15 @@ costs roll into `opencode-telemetry`. Unresolved conflict: stop and report.
 
 ## Parallel work (always)
 
-Use as many agents as the work needs — the limit is the size of the
-partition, not the number of agents. No two *writers* may own the same path:
-partition the change into work units (a service, a package, a feature area, a
-document), give every unit one owner and one worktree, run independent units in
-the same wave and dependent units in the next, and let read-only lanes
-overlap freely. Write the scope manifest and check it before dispatching:
-`node bin/agents-scope.mjs --write .agents/lanes.json` then
-`node bin/agents-scope.mjs --check .agents/lanes.json` — it fails on two
-write lanes claiming one path, on a path outside the repository, or on a write
-lane with no scope.
+Lean sequential by default: most coding work has fewer independent units than
+research, and a multi-agent run costs far more. When the change genuinely
+partitions, cut it into work units, give every writer one path set, one
+worktree and one owner — a shared type, a schema, a generated file, a lockfile
+or a migration gets a single owner who lands it first — and let read-only
+lanes overlap freely. Write the scope manifest and check it before dispatching
+and the result against it afterwards: `node bin/agents-scope.mjs --write
+.agents/lanes.json`, `--check`, `--verify --changed <file>,<file>`. The full
+contract lives in the orchestrator agent.
 
 ## Disk hygiene (always)
 

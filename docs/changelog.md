@@ -11,27 +11,6 @@ commit date of the same version.
 
 ## [1.4.3] - 2026-10-20
 
-### Fixed
-
-- The installer stages a copy next to the destination and swaps it in, keeping
-  the old one until the new one is in place: a tree whose copy fails now leaves
-  the destination alone instead of deleting it, the staging directory is
-  removed when the copy fails, and the copy says so when the staged file is
-  short or the source is empty.
-- The hygiene report looks for worktrees on the repository's own drive, not only
-  on one fixed letter.
-- The `mindmap` skill no longer tells an agent to publish a page, store a map
-  in the Knowledge Atlas or write "for Claude" in a footer: the map is a file in
-  the repository, and the atlas is documented as reference material for a host
-  that can publish pages.
-
-### Changed
-
-- Each changelog entry sits under the version that shipped it, and the roadmap
-  records what the last two versions delivered.
-
-## [1.4.2] - 2026-10-20
-
 ### Added
 
 - The `mindmap` skill: a mind map is a file in the repository, not a chat
@@ -42,18 +21,42 @@ commit date of the same version.
   with its license); the Claude-only Knowledge Atlas mode is documented as
   unavailable. `AGENTS.md`, the routing table, the README and the
   `repo-standards` skill say when a map belongs in a project.
+- A dispatch contract for parallel work: the orchestrator partitions a change
+  into work units, gives every writer one path set, one worktree and one
+  owner, lands a shared artifact (a type, a schema, a generated file, a
+  lockfile, a migration) through one owner first, and proves the plan with
+  `bin/agents-scope.mjs` before dispatching and the result against it
+  afterwards.
+- A new README: an animated hero, the workflow graphic, badges, and a stats
+  block counted from the repository by `bin/readme-stats.mjs` (CI keeps it
+  honest).
+- The installer reports the MCP credentials that are missing from the process
+  environment (`GITHUB_TOKEN`, `SENTRY_ACCESS_TOKEN`) and says that a value set
+  after the host started is not visible until it restarts, and that the `.env`
+  file feeds the wrapped local servers, not a header credential on a remote
+  server.
+- The installer reports that `opencode-mem` holds a single-writer database: run
+  one OpenCode server at a time, or the second one cannot open it and the
+  plugin reports itself as failed.
 
 ### Fixed
 
-- The installer replaces a file atomically: it stages the copy next to the
-  destination and swaps it in, keeping the old one until the new one is in
-  place. The remove-then-copy left a window in which the host could read an
-  empty `opencode.jsonc` — and an empty config takes every plugin, MCP and
-  agent with it, which is what left the host without `oh-my-opencode-slim` and
-  without the MCPs. The copy now also says so when the destination ends up
-  empty or short, cleans up its staging directory when the copy fails, never
-  replaces a link the user put in place, and leaves a tree in place when its
-  copy fails.
+- The installer writes every file it owns atomically: it stages the copy next
+  to the destination and swaps it in, keeping the old one until the new one is
+  in place. The remove-then-copy, and the plain rewrite the MCP repoint used,
+  left a window in which the host could read an empty `opencode.jsonc` — and an
+  empty config takes every plugin, MCP and agent with it, which is what left
+  the host without `oh-my-opencode-slim` and with two MCPs. A tree whose copy
+  fails now leaves the destination alone, the staging directory is removed when
+  the copy fails, a link the user put in place is never replaced, and the copy
+  says so when the staged file is short or the source is empty.
+- The hygiene report looks for worktrees on the repository's own drive, not only
+  on one fixed letter.
+- The `mindmap` skill no longer tells an agent to publish a page, store a map
+  in the Knowledge Atlas, write "for Claude" in a footer, or save through an
+  API that no browser has: the map is a file in the repository, the atlas is
+  reference material for a host that can publish pages, and the save button
+  uses the browser's own storage.
 
 ### Changed
 
@@ -64,22 +67,9 @@ commit date of the same version.
 - `AGENTS.md`: every change lands through a new pull request. The branch is
   pushed — a pull request that only exists on this machine is not done — and
   merging stays the human's decision.
-- The installer names the credentials the host needs in its own environment
-  (`GITHUB_TOKEN`, `SENTRY_ACCESS_TOKEN`) and says that the `.env` file feeds
-  the wrapped local servers, not a header credential on a remote server.
-
-## [1.4.1] - 2026-10-20
-
-### Added
-
-- The installer reports the MCP credentials that are missing from the process
-  environment (`GITHUB_TOKEN`, `SENTRY_ACCESS_TOKEN`) and says that a value set
-  after the host started is not visible until it restarts, and that the `.env`
-  file feeds the wrapped local servers, not a header credential on a remote
-  server.
-- The installer reports that `opencode-mem` holds a single-writer database: run
-  one OpenCode server at a time, or the second one cannot open it and the
-  plugin reports itself as failed.
+- Parallel work leans sequential by default: most coding work has fewer
+  independent units than research, and a multi-agent run costs far more. The
+  lane count scales with the partition, and a shared artifact has one owner.
 
 ## [1.4.0] - 2026-10-20
 

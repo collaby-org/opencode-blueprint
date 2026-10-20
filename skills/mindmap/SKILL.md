@@ -6,7 +6,7 @@ description: >
   down visually", or "turn this into a mind map", you MUST use this skill. Stop everything
   and read this SKILL.md immediately. The default output is a Markmap-flavored Markdown file
   written into the project's docs home (docs/mindmaps/<topic>.mindmap.md). If the user asks for
-  an interactive map, write the React (.jsx) file next to it instead. Do NOT respond with a
+  an interactive map, write the React (.jsx) file next to it as well. Do NOT respond with a
   plain text summary or outline. Do NOT use Mermaid.js or Excalidraw.
 ---
 
@@ -199,15 +199,15 @@ export default function MindMap() {
     var slug = mindmapData.central.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
     var key = "maps:" + slug;
     var existing = null;
-    try { existing = await window.storage.get(key); } catch(e) {}
+    try { existing = window.localStorage.getItem(key); } catch(e) {}
     var now = new Date().toISOString();
     var record = {
       data: mindmapData, palette: palName, layout: "radial",
-      createdAt: existing ? JSON.parse(existing.value).createdAt : now,
+      createdAt: existing ? JSON.parse(existing).createdAt : now,
       updatedAt: now, tags: [],
     };
     try {
-      await window.storage.set(key, JSON.stringify(record));
+      window.localStorage.setItem(key, JSON.stringify(record));
       setSaveMsg(existing ? "Updated ✓" : "Saved ✓");
     } catch(e) { setSaveMsg("Error"); }
     setTimeout(function() { setSaveMsg(null); }, 2000);
