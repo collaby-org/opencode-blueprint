@@ -13,6 +13,64 @@ commit date of the same version.
 
 Working tree changes that are not tagged yet. Snapshot taken 2026-10-20.
 
+### Changed
+
+- `opencode-mem` is a path plugin now (`config/plugins/opencode-mem`, a
+  wrapper that re-exports `opencode-mem/v2`), and the package is pinned in the
+  config home (`<config>/package.json`, `opencode-mem@2.32.0`). The Bun loader
+  resolves bare imports from `<config>/node_modules`, not from the plugin
+  directory, so a tree next to the wrapper is invisible to it — that, plus an
+  incomplete cache install missing `@libsql/client` and
+  `@huggingface/transformers` after an `ENOSPC`, is why the plugin failed with
+  `Cannot find package`. The `plugin` array lists only `oh-my-opencode-slim`
+  from npm now, and the duplicate 864 MB tree under `plugins/opencode-mem` was
+  removed.
+
+### Added
+
+- The local code review gate is wired end to end. New `code-review` skill
+  (`/code-review`) with three scripts and three reference files:
+  `plan-review.mjs` resolves the scope, classifies files, and splits the diff
+  into 40k-token chunks with one diff file per chunk; reviewer agents run on a
+  model from a different family than the author; `reconcile-review.mjs`
+  applies the confidence gate (80), drops findings outside the changed lines,
+  dedupes, caps at 32, and writes `docs/reviews/` plus a state file;
+  `post-review.mjs` keeps one sticky comment per pull request, updated in
+  place, dry run by default.
+- New `opencode-code-review` plugin: registers the `/code-review` command and
+  its orchestrator agent, exposes a read only `code_review_status` tool, and
+  blocks `gh pr create` until a complete review of the current HEAD returns
+  `approve` or `approve-with-nits`. Draft PRs pass, and
+  `enforce_pr_gate: false` in `review.json` is the explicit escape.
+- `.github/workflows/kodus.yml` and `.github/workflows/pr-agent.yml`: the
+  GitHub side gates as the last resort. Both skip their review step while
+  `KODUS_TEAM_KEY` and `LLM_API_KEY` are absent, so a fresh repository never
+  goes red before it is configured.
+- `bin/clean.mjs`: reports the caches a development loop accumulates and, with
+  `--apply`, deletes package-manager caches (npm, Yarn, pnpm, pip, uv) and
+  review scratch directories older than a day. The first run freed 5.8 GB. It
+  never touches the OpenCode plugin tree (`~/.cache/opencode`), worktree
+  `node_modules`, or anything a running session reads: a cache written in the
+  last ten minutes is reported as in use and skipped. Removing the plugin tree
+  is what forced a slow reinstall and widened the restore window behind
+  `Agent not found: orchestrator`, so that path no longer exists.
+- Local MCP servers that need a secret go through `<config>/tools/mcp-env.mjs`,
+  which loads `<config>/.env` and expands `@NAME@`/`{env:NAME}` itself.
+  OpenCode expands placeholders from its own process environment, so
+  `DATABASE_URL` reached the Postgres server as an empty string and it died on
+  `new URL("")`; Redis and MongoDB had been silently using localhost defaults.
+- The GitHub MCP entry authenticates with a PAT header (`GITHUB_TOKEN` in the
+  user environment): the remote endpoint does not support dynamic client
+  registration, so OAuth could never complete. The Kubernetes entry is disabled
+  until a kubeconfig context exists — the server exits immediately without one.
+
+- `AGENTS.md` now requires worktrees under `F:\worktrees\<repo>\<branch>`
+  (never inside the repository, never on the system drive), sends every change
+  through a pull request instead of a direct commit to `main`, and keeps the
+  system drive above ~15 GB with the cleanup above.
+
+## [1.2.7] - 2026-10-20
+
 ### Added
 
 - The installer now installs the local MCP servers as pinned packages under

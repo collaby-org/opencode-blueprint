@@ -48,3 +48,11 @@ Skipped only when the CLI is missing — then say so and continue without it, ne
 ## Bar
 
 Nothing commits until clean.
+
+## On GitHub (last resort)
+
+`/.github/workflows/kodus.yml` runs the same review on the PR itself, after
+the local gate and after the local Kodus loop. It skips its review step while
+`KODUS_TEAM_KEY` is absent, so a repository is never red before it is
+configured. The workflow is the second net, not the first: never present a PR
+URL with the local gate skipped because CI might catch it.

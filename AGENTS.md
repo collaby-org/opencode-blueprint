@@ -37,19 +37,24 @@ invariants into the repo's own `AGENTS.md`; this file governs everywhere.
 3. **Prove — `evidence-driven-testing`.** Repo checks plus runtime evidence.
    Capture **before** while reproducing (cheapest moment), **after** once it
    works. UI proof via `before-and-after`; numbers/output pairs otherwise.
-   Then the **Kodus loop** (see below) — nothing commits until it is clean.
    `/check verify` drives the real app against the spec here, alongside
    `evidence-driven-testing` and `before-and-after` evidence. `/test` runs
    after implementing or changing code and owns the suite for uncommitted
    changes.
+   Then the **local code review gate** (`/code-review`, see below) on a model
+   from a different family than the author, then the **Kodus loop** (see
+   below). That order is fixed: nothing commits until both are clean.
 4. **Ship — proof, polish, review.** PR body carries before/after evidence,
    `/unslop` cleans all human-read text, `opencode-review` (`/review`)
    auto-fixes code findings, PR-Agent (`/pr-agent`) and Kodus review comments
    go to zero. Present the PR URL. Do not merge unless told to. Keep the
    worktree until merge/close. Every repo gets the PR-Agent Action once via
    `/pr-agent-setup` (see [PR-Agent preset](#pr-agent-preset)).
-   `/check review` runs here — fresh-model review after verify, before PR
-   prose. `/document` drafts PR text / changelog / release-note / postmortem
+   After the PR opens, sync the local review artifact to it
+   (`post-review.mjs --apply`, one sticky comment that updates in place).
+   `/check review` runs here too — the quick single-pass read after verify,
+   before PR prose; it does not replace `/code-review`.
+   `/document` drafts PR text / changelog / release-note / postmortem
    from the real diff after the change is green (runs after the living-docs
    update so prose reflects final docs). `/sync` is HUMAN-ONLY: agents must
    NEVER invoke `/sync` on their own — only when the user explicitly
@@ -120,7 +125,8 @@ Load the skills matching the target. Nothing else.
 | Feature shaping input (ours own the gate) | `feature-forge` (→ `/scope`) |
 | Spec mining input (ours own the gate) | `spec-miner` (→ `/audit`, human-only) |
 | Debug / failure triage | `debugging-wizard` (→ `/debug`) |
-| Code review | `code-reviewer` (→ `kodus-review` / `/review`) |
+| Local review gate (ours) | `code-review` (→ `/code-review`, mandatory before commit) |
+| Code review input | `code-reviewer` (→ `kodus-review` / `/review`) |
 | Docs from diff | `code-documenter` (→ `/document` + living-docs) |
 | Full-stack guardrail | `fullstack-guardian` |
 | Agent process / authoring | `writing-for-agents` (skills + AGENTS.md), `domain-modeling` (GLOSSARY/ADR), `research` (cited notes), `handoff` (session handoff), `retro` (retro on the agent's environment), `grilling` / `grill-me` / `grill-with-docs` (relentless interview), `pr` (PR body), `ask-matt` (skill router) |
@@ -130,7 +136,7 @@ Bar: match the skill to the repo's ACTUAL pinned versions in `tech_stack.md` —
 
 User-invoked only (OpenCode `autoinvoke: false`): `ask-matt`, `grill-me`, `grill-with-docs`, `handoff`, `retro`, `prototype` — load them only when the user asks for that flow, never spontaneously.
 
-Ours own the gates (`architecture-designer`→`/architect`, `feature-forge`→`/scope`, `spec-miner`→`/audit`, `debugging-wizard`→`/debug`, `test-master`→`/test`, `code-reviewer`→`kodus-review`/`/review`, `security-reviewer`→Kodus gate, `code-documenter`→`/document` + living-docs) — their content is input/checklist only. Later group: load only when the repo actually has that surface.
+Ours own the gates (`architecture-designer`→`/architect`, `feature-forge`→`/scope`, `spec-miner`→`/audit`, `debugging-wizard`→`/debug`, `test-master`→`/test`, `code-review`→`/code-review`, `code-reviewer`→`kodus-review`/`/review`, `security-reviewer`→Kodus gate, `code-documenter`→`/document` + living-docs) — their content is input/checklist only. Later group: load only when the repo actually has that surface.
 
 ## UI rules (always)
 
@@ -162,16 +168,54 @@ materializes its own copy. Stale system docs are a bug.
 
 ## Multi-agent rules
 
-- One worktree + one branch per task/agent. Never touch another agent's
-  worktree, branch, or uncommitted work.
+- One worktree + one branch per task/agent, created under
+  `F:\worktrees\<repo>\<branch>` — never inside the repository directory,
+  never on the system drive. Never touch another agent's worktree, branch, or
+  uncommitted work.
 - Scope check first: `gh pr list`, `gh pr diff <n> --name-only`.
-- Never commit to `main`. Never plain `--force`; `--force-with-lease` on
-  your own branch only. Regenerate lockfiles, never hand-merge.
+- Never commit to `main`: every change lands through a pull request (branch →
+  PR → review → merge), and releases are tagged from the merged commit. Never
+  plain `--force`; `--force-with-lease` on your own branch only. Regenerate
+  lockfiles, never hand-merge.
 - Worktrees don't isolate ports or databases — confirm the dev-server port
   answers your process; no schema experiments on shared DBs.
 - Memory (`opencode-mem`) captures durable facts automatically; don't
   re-derive decided conventions. Costs roll into `opencode-telemetry`.
 - Conflicts you can't resolve confidently: stop and report.
+
+## Disk hygiene (always)
+
+- Keep the system drive above ~15 GB free. It fills silently: npm, Yarn and
+  pnpm caches, pip/uv wheels, OpenCode plugin caches and orphaned worktree
+  `node_modules` trees are the usual 60+ GB.
+- After any install-heavy step, reclaim: `node bin/clean.mjs` reports what is
+  safe to delete, `node bin/clean.mjs --apply` deletes it (npm cache, Yarn
+  cache, pnpm store, pip/uv caches, `~/.cache/opencode`).
+- One copy of a dependency tree, never two. A plugin the loader resolves from
+  `<config>/node_modules` gets no local `node_modules` of its own; a worktree's
+  `node_modules` is deleted when the worktree closes.
+- Delete the worktree once its branch is merged, and say so in the report.
+
+## Local code review gate (always)
+
+After `/check verify`, before the Kodus loop and before every commit, load the
+`code-review` skill and run `/code-review`: several reviewer agents in
+parallel, always on a model from a different family than the one that wrote
+the code, chunked for a 200k context window, confidence gated at 80, findings
+only. It is mandatory, not a second opinion.
+
+- The `opencode-code-review` plugin registers the command and blocks
+  `gh pr create` until a complete review of the current HEAD returns
+  `approve` or `approve-with-nits`. Draft PRs are allowed. The explicit
+  escape is `enforce_pr_gate: false` in `.opencode/review.json`.
+- The reviewer never edits code. Findings go to the implementer, then the
+  review reruns, at most twice. A third failed round goes to the human.
+- After the PR opens, sync the result with
+  `node <skill>/scripts/post-review.mjs --apply`: one sticky comment, updated
+  in place, naming the commit it reviewed. No inline comments from local line
+  numbers.
+- GitHub Kodus and PR-Agent stay the last resort after this gate, not a
+  substitute. A clean GitHub run does not excuse skipping the local review.
 
 ## Kodus loop (always)
 
@@ -189,6 +233,9 @@ PR-Agent reviews every PR once the repo carries the preset pair — load the
 until clean (`/improve`, `/ask` as needed; bootstrap via `/pr-agent-setup`
 on new repos). Full protocol lives in the skill. Bar: PR-Agent + Kodus
 comments to zero before presenting the PR URL.
+The Kodus and PR-Agent GitHub workflows are the last resort, outside OpenCode:
+a second net for security and bugs the local gate missed. They never replace
+`/code-review`, and the local gate never replaces them.
 
 ## opencode GitHub integration (always)
 
@@ -209,8 +256,8 @@ Load the `ship` skill at the end of every task — the full end-of-task protocol
    never assumed — ask first.
 2. Run the repo's checks (`/test` owns the suite; `/debug` on failure, regression test to `/test`).
 3. Assemble before/after evidence (`/check verify` against the spec; UI via `before-and-after`).
-4. Kodus loop to clean, commit (conventional commits), rebase on `origin/main`, rerun checks.
-5. Push, open PR (`/check review`, then `/document`; `/unslop` on title + body).
+4. Code review gate to clean (`/code-review`, cross model), then Kodus loop to clean, commit (conventional commits), rebase on `origin/main`, rerun checks.
+5. Push, open PR, sync the review comment (`post-review.mjs --apply`), then `/check review`, then `/document`; `/unslop` on title + body.
 6. `/review` + `/pr-agent` + Kodus to zero comments. Present the PR URL.
 7. `/sync` is HUMAN-ONLY — agents must NEVER invoke it on their own, only
    when the user explicitly authorizes it in that same task. Never

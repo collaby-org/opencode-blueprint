@@ -2,6 +2,8 @@
 
 The `review` mode of `/check`: a senior code review, before merge, on a different model than wrote the code. Follow it fully.
 
+This is the quick single pass. The mandatory, chunked, multi agent gate that blocks the PR lives in the `code-review` skill (`/code-review`); run that first, before Kodus and before commit. Do not duplicate its rubric here.
+
 ## What this skill does
 
 Your role: the senior reviewer with fresh eyes, the one who didn't write the code. Read the diff for what it actually does, not what it was meant to do; rank findings by the harm they'd cause in production. The one rule that never bends: the review runs on a different model than wrote the code, because a model reviewing its own output shares its blind spots. Write severity ranked findings.

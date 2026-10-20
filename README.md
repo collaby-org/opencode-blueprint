@@ -1,7 +1,7 @@
 # OpenCode Blueprint
 
 > One command. A complete, opinionated, production-grade [opencode](https://opencode.ai)
-> environment — **22 MCPs, 10 plugins, 119 skills, a global agent workflow,**
+> environment - **22 MCPs, 11 plugins, 120 skills, a global agent workflow,**
 > and **Kodus + PR-Agent** review loops. Built for teams shipping
 > Apple-clean, award-worthy software.
 
@@ -49,14 +49,15 @@ finished answer — researched, de-duplicated, and verified working together:
 > handshaking, and `pipx run` rebuilds a venv on every start — which is what
 > timed `google-analytics` out.
 
-### Plugins (10) — runtime superpowers
+### Plugins (11) — runtime superpowers
 
 | Plugin | Job |
 |---|---|
 | `oh-my-opencode-slim` | 7-agent orchestration (the one orchestrator — swarm/micode/OAC intentionally excluded) |
-| `opencode-mem` | Automatic long-term memory with vector recall |
+| `opencode-mem` (local path) | Automatic long-term memory with vector recall — local wrapper with its own complete deps (the npm cache install came out incomplete, missing `@libsql/client`) |
 | `opencode-dcp` (local vendored copy) | Context pruning (pairs with memory, not against it) — vendored from `@tarquinen/opencode-dcp@3.2.0` with `<dcp-system-reminder>` blocks relocated into `event.system` instead of rendering as chat bubbles (a `synthetic`-flag experiment was reverted after the 2.0.24 host proved to drop `synthetic` parts from model context), pending upstream [#608](https://github.com/Opencode-DCP/opencode-dynamic-context-pruning/issues/608) |
 | `opencode-review` | `/review` command + `review` / `review:fixer` agents with dimension prompts (local install — not on npm; the idle auto-trigger has no v2 hook and stays unwired) |
+| `opencode-code-review` (local) | Mandatory local review gate: `/code-review` command + `code-review` agent + a `gh pr create` hook that blocks until a complete cross-model review of HEAD passes |
 | `opencode-telemetry` (local port) | Local cost/usage telemetry — `/telemetry-report` + `/telemetry-inspect` over a local file store (no sqlite, no npm) |
 | `opencode-ralph-wiggum` (local port) | Iterative dev loops — `/ralph-loop`, `/ralph-continue`, `/cancel-ralph` (no npm) |
 | `opencode-github-release` (local port) | Semantic-version GitHub releases — bump suggestion + tag/publish (no npm) |
@@ -86,7 +87,7 @@ finished answer — researched, de-duplicated, and verified working together:
 > agent draft is ready — host kills them with
 > `Agent not found: "orchestrator"` (`Failed to drain Session`).
 
-### Skills (119) — stack knowledge
+### Skills (120) - stack knowledge
 
 | Stack | Skills |
 |---|---|
@@ -97,6 +98,7 @@ finished answer — researched, de-duplicated, and verified working together:
 | Tauri desktop | `tauri-v2` |
 | Design (all S-rank) | `apple-design`, `animate`, `animate-expo`, `animation-vocabulary`, `animation-performance`, `emil-design-eng`, `review-animations`, `improve-animations`, `find-animation-opportunities`, `pick-ui-library`, `prototype`, `design-taste-frontend`, `impeccable`, `shadcn`, `ask-sonner`, `mobile-native`, `break-ui` |
 | Workflow | `new-feature`, `code-structure`, `evidence-driven-testing`, `before-and-after`, `unslop`, `perf-debug` |
+| Local review gate | `code-review` (cross model, chunked, confidence gated; `code-reviewer` remains the review input skill) |
 | Diagrams / architecture | `diagram-design` (45 diagram types, branded HTML/SVG), `excalidraw-diagram` |
 | Video / motion output | `hyperframes` (router) + `hyperframes-core`, `hyperframes-animation`, `hyperframes-audio`, `hyperframes-cli`, `hyperframes-creative`, `hyperframes-keyframes`, `hyperframes-registry`, `hyperframes-studio`, `media-use`, `general-video`, `product-launch-video`, `faceless-explainer`, `pr-to-video` |
 | Agent process / authoring | `writing-for-agents`, `domain-modeling`, `research`, `handoff`, `retro`, `grilling`, `grill-me`, `grill-with-docs`, `ask-matt` (skill router), `pr` (PR body) |
@@ -114,15 +116,15 @@ finished answer — researched, de-duplicated, and verified working together:
 | Postgres tuning | `postgres-pro`, `database-optimizer` |
 | DevOps / pipeline | `devops-engineer` |
 | Test strategy / suite | `test-master` |
-| Gate inputs (commands own the gate) | `architecture-designer` → `/architect`, `feature-forge` → `/scope`, `spec-miner` → `/audit`, `debugging-wizard` → `/debug`, `code-reviewer` → review, `code-documenter` → `/document`, `fullstack-guardian` |
+| Gate inputs (commands own the gate) | `code-review` → `/code-review`, `architecture-designer` → `/architect`, `feature-forge` → `/scope`, `spec-miner` → `/audit`, `debugging-wizard` → `/debug`, `code-reviewer` → review, `code-documenter` → `/document`, `fullstack-guardian` |
 | Later (surface-gated) | `kubernetes-specialist`, `terraform-engineer`, `microservices-architect`, `mcp-developer`, `monitoring-expert` |
 
 ### The workflow (`AGENTS.md`, installed globally)
 
 1. **Isolate** — fresh worktree per feature (established projects; skipped for new apps/migrations); `/scope` first for new builds/migrations, `/audit` human-only when context stale.
 2. **Build** — `/develop` (+ `code-structure` + stack skills, `design-system` for UI); → `/architect` spec when a decision is owed; `/debug` anytime.
-3. **Prove** — runtime evidence (before/after) + `/check verify` vs spec, `/test` owns the suite; then the **Kodus loop** to clean.
-4. **Ship** — `/check review`, PR with evidence, `/document`, `/unslop` prose, **PR-Agent + Kodus at zero** (`/sync` human-only, never auto-chained).
+3. **Prove** — runtime evidence (before/after) + `/check verify` vs spec, `/test` owns the suite; then **`/code-review`** (cross model, confidence gated), then the **Kodus loop** to clean.
+4. **Ship** — `/code-review` synced to the PR, `/check review`, PR with evidence, `/document`, `/unslop` prose, **PR-Agent + Kodus at zero** (`/sync` human-only, never auto-chained).
 
 Design bar: Apple-clean, invisible motion (`transform`/`opacity`, <300ms,
 springs, reduced-motion honored), full UI states, dark mode from day one.
@@ -135,9 +137,9 @@ npx opencode-blueprint
 
 The installer: checks prerequisites → backs up your existing config →
 copies `opencode.jsonc` + `AGENTS.md` + commands + `.env.example` starter →
-copies all 8 local plugin trees and installs each one's deps (plus the
+copies all 10 local plugin trees and installs each one's deps (plus the
 central `@opencode-ai/plugin` fallback the loader resolves against) →
-installs all 119 skills globally (registry via `skills add`, 16 workflow
+installs all 120 skills globally (registry via `skills add`, 17 workflow
 skills vendored from `skills/`) → installs the Kodus CLI
 and `redis-mcp-server` → installs the pinned `rea-agents`, `prisma`,
 `@modelcontextprotocol/server-postgres`, `mongodb-mcp-server`,
@@ -175,6 +177,7 @@ confirmation on first run. The compiled
 | `/pr-agent-setup` | Scaffolds PR-Agent Action + `.pr_agent.toml`; asks for LLM endpoint, model, key; stores secrets |
 | `/pr-agent <pr>` | `/review` → fix → re-review until clean |
 | `/kodus-review` | Kodus review-fix loop until no high/critical findings |
+| `/code-review` | Mandatory local review gate: cross-model reviewers, chunked diff, confidence gated, blocks `gh pr create` until clean (from plugin) |
 | `/ralph-loop "<task>"` | Ralph iteration loop (from plugin) |
 | `/review` | On-demand code review (from plugin) |
 
@@ -219,12 +222,13 @@ the installer needs — so do not put a credential in a tracked file.
 | Path | What |
 |---|---|
 | `AGENTS.md` | Global workflow (source of truth) |
-| `config/opencode.jsonc` | 22 MCPs (5 GCP remotes disabled — no dynamic client registration) · 2 npm + 8 local plugins · instructions |
-| `config/commands/` | `/pr-agent`, `/pr-agent-setup`, `/kodus-review` |
-| `config/plugins/` | 8 local plugin trees: `opencode-review`, `opencode-dcp` (vendored 3.2.0), + 6 v2 ports (github-release, telemetry, envsitter-guard, log-sanitizer, command-inject, ralph-wiggum) |
-| `skills/` | 16 vendored workflow skills (rest via installer registry list) |
+| `config/opencode.jsonc` | 22 MCPs (5 GCP remotes disabled — no dynamic client registration) · 1 npm + 10 local plugins · instructions |
+| `config/commands/` | `/pr-agent`, `/pr-agent-setup`, `/kodus-review` (plus `/code-review`, registered by the `opencode-code-review` plugin) |
+| `config/plugins/` | 10 local plugin trees: `opencode-review`, `opencode-code-review`, `opencode-mem` (wrapper), `opencode-dcp` (vendored 3.2.0), + 6 v2 ports (github-release, telemetry, envsitter-guard, log-sanitizer, command-inject, ralph-wiggum) |
+| `skills/` | 17 vendored workflow skills (rest via installer registry list) |
 | `config/.env.example` | Required env vars (values never committed) |
 | `bin/setup.mjs` | The installer |
+| `bin/clean.mjs` | Disk reclamation: report by default; `--apply` deletes package-manager caches and day-old review scratch, never the plugin tree or worktree `node_modules` |
 
 ## Contributing
 

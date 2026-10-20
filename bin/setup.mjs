@@ -306,6 +306,7 @@ cp(join(REPO, "config", "opencode.jsonc"), join(TARGET, "opencode.jsonc"));
 cp(join(REPO, "AGENTS.md"), join(TARGET, "AGENTS.md"));
 cp(join(REPO, "config", "commands"), join(TARGET, "commands"));
 cp(join(REPO, "config", "plugins", "opencode-review"), join(TARGET, "plugins", "opencode-review"));
+cp(join(REPO, "config", "plugins", "opencode-code-review"), join(TARGET, "plugins", "opencode-code-review"));
 cp(join(REPO, "config", "plugins", "opencode-dcp"), join(TARGET, "plugins", "opencode-dcp"));
 cp(join(REPO, "config", "plugins", "opencode-github-release"), join(TARGET, "plugins", "opencode-github-release"));
 cp(join(REPO, "config", "plugins", "opencode-telemetry"), join(TARGET, "plugins", "opencode-telemetry"));
@@ -313,6 +314,12 @@ cp(join(REPO, "config", "plugins", "envsitter-guard"), join(TARGET, "plugins", "
 cp(join(REPO, "config", "plugins", "opencode-log-sanitizer"), join(TARGET, "plugins", "opencode-log-sanitizer"));
 cp(join(REPO, "config", "plugins", "opencode-command-inject"), join(TARGET, "plugins", "opencode-command-inject"));
 cp(join(REPO, "config", "plugins", "opencode-ralph-wiggum"), join(TARGET, "plugins", "opencode-ralph-wiggum"));
+cp(join(REPO, "config", "plugins", "opencode-mem"), join(TARGET, "plugins", "opencode-mem"));
+// mcp-env wrapper: loads <config>/.env and expands {env:...} for local MCP
+// servers, because OpenCode's own expansion reads only its process
+// environment. Without it DATABASE_URL / REDIS_URL arrive empty.
+if (!DRY) mkdirSync(join(TARGET, "tools"), { recursive: true });
+cp(join(REPO, "config", "tools", "mcp-env.mjs"), join(TARGET, "tools", "mcp-env.mjs"));
 // Copy .env.example as a starter template only — never overwrite an existing
 // (possibly filled-in) .env.example in TARGET.
 const envExampleDest = join(TARGET, ".env.example");
@@ -344,7 +351,7 @@ if (!existsSync(slimCfgDest)) {
   log(`  skip ${slimCfgDest} (already exists — not overwriting user config)`);
 }
 
-log("== 3/6 local plugin deps (review, dcp + 6 ports) ==");
+log("== 3/6 local plugin deps (review, code-review, mem, dcp + 6 ports) ==");
 run("npm", ["install", "--prefix", join(TARGET, "plugins", "opencode-review"), "@opencode-ai/plugin"]);
 // opencode-dcp is a vendored npm tree (deps pinned in its package.json):
 // production-only install. --legacy-peer-deps works around an upstream
@@ -353,20 +360,29 @@ run("npm", ["install", "--prefix", join(TARGET, "plugins", "opencode-review"), "
 // TUI entry was built against. No version upgrades beyond the pins.
 run("npm", ["install", "--prefix", join(TARGET, "plugins", "opencode-dcp"), "--omit=dev", "--legacy-peer-deps", "--no-audit", "--no-fund"]);
 // Ported plugins (deps pinned in each package.json) — same production flags.
-for (const name of ["opencode-github-release", "opencode-telemetry", "envsitter-guard", "opencode-log-sanitizer", "opencode-command-inject", "opencode-ralph-wiggum"]) {
+// opencode-mem is NOT here: it installs into the config home, because the Bun
+// loader resolves bare imports up to TARGET/node_modules, not from the plugin
+// directory. A local tree there is invisible to the loader (and 864 MB of
+// duplicated dependencies).
+for (const name of ["opencode-github-release", "opencode-telemetry", "envsitter-guard", "opencode-log-sanitizer", "opencode-command-inject", "opencode-ralph-wiggum", "opencode-code-review"]) {
   run("npm", ["install", "--prefix", join(TARGET, "plugins", name), "--omit=dev", "--legacy-peer-deps", "--no-audit", "--no-fund"]);
 }
-// Central fallback dep: the Bun loader walks bare imports up to
+// Central fallback deps: the Bun loader walks bare imports up to
 // TARGET/node_modules, so the central copy must expose ./v2/promise
-// (>=1.18.29). Merge into TARGET/package.json (never overwrite other keys),
-// then install. Without this, path plugins fall back to a stale central
-// copy and fail with "Cannot find package".
+// (>=1.18.29). opencode-mem is here for the same reason — its own tree inside
+// plugins/opencode-mem is never consulted. Merge into TARGET/package.json
+// (never overwrite other keys), then install. Without this, path plugins fall
+// back to a stale central copy and fail with "Cannot find package".
 const centralPkgPath = join(TARGET, "package.json");
 let centralPkg = {};
 if (existsSync(centralPkgPath)) {
   centralPkg = JSON.parse(readFileSync(centralPkgPath, "utf8"));
 }
-centralPkg.dependencies = { ...(centralPkg.dependencies || {}), "@opencode-ai/plugin": "^1.19.1" };
+centralPkg.dependencies = {
+  ...(centralPkg.dependencies || {}),
+  "@opencode-ai/plugin": "^1.19.1",
+  "opencode-mem": "2.32.0",
+};
 if (!DRY) writeFileSync(centralPkgPath, JSON.stringify(centralPkg, null, 2) + "\n");
 else log(`  write ${centralPkgPath} (merge @opencode-ai/plugin into dependencies)`);
 run("npm", ["install", "--prefix", TARGET, "--no-audit", "--no-fund"]);
@@ -408,7 +424,7 @@ for (const name of AUTOINVOKE_SKILLS) {
 // Vendored local/workflow skills (skills/ in this repo) — cannot be installed
 // via `skills add`, copied verbatim. Overwrite is correct (versioned content,
 // unlike .env.example above).
-const VENDORED_SKILLS = ["architect", "audit", "check", "debug", "design-system", "develop", "document", "kodus-review", "living-docs", "opencode-github", "pr-agent", "scope", "ship", "sync", "test", "write-swift"];
+const VENDORED_SKILLS = ["architect", "audit", "check", "code-review", "debug", "design-system", "develop", "document", "kodus-review", "living-docs", "opencode-github", "pr-agent", "scope", "ship", "sync", "test", "write-swift"];
 for (const name of VENDORED_SKILLS) {
   const src = join(REPO, "skills", name);
   const dest = join(SKILLS_DIR, name);

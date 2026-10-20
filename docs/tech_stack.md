@@ -50,15 +50,17 @@ the README were verified against opencode **2.0.24**.
 | Item | Version | Source |
 |---|---|---|
 | `@opencode-ai/plugin` central fallback | `^1.19.1` | written into the config home `package.json` by `bin/setup.mjs` |
-| `@opencode-ai/plugin` per ported plugin | `^1.19.1` | `config/plugins/*/package.json`, the 7 ported trees |
+| `@opencode-ai/plugin` per ported plugin | `^1.19.1` | `config/plugins/*/package.json`, the 8 ported trees |
 | `@opencode-ai/plugin` in the vendored DCP copy | `^1.18.32` (runtime), `>=1.18.29` (peer), `^1.18.29` (dev) | `config/plugins/opencode-dcp/package.json` |
-| `opencode-mem` | not pinned | `config/opencode.jsonc` lists the bare npm name |
+| `opencode-mem` | `2.32.0` | `<config>/package.json` dependencies (the Bun loader resolves bare imports from `<config>/node_modules`); `config/plugins/opencode-mem` is the path wrapper that re-exports `opencode-mem/v2` |
 | `oh-my-opencode-slim` | not pinned | `config/opencode.jsonc` lists the bare npm name |
 
-The seven ported plugin trees export the plugin through `define` from the
+The eight ported plugin trees export the plugin through `define` from the
 resolvable `@opencode-ai/plugin/v2/promise` subpath. The vendored DCP copy
 keeps the upstream entry points and imports the bare `@opencode-ai/plugin`
-root, at its own `^1.18.32` pin.
+root, at its own `^1.18.32` pin. The `code-review` skill's scripts are plain
+ESM (`node:child_process` only) and run on Node 18 or newer, which keeps them
+usable under the host runtime.
 
 ## Vendored DCP copy
 

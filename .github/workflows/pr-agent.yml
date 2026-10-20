@@ -1,0 +1,49 @@
+name: PR Agent
+
+# Last resort, outside OpenCode. The local /code-review gate and the local
+# Kodus loop run first; this is the second security and bug net on the PR.
+#
+# Opt in per repository:
+#   1. gh secret set LLM_API_BASE --body "<openai compatible chat completions url>"
+#   2. gh secret set LLM_API_KEY
+#   3. add .pr_agent.toml with the exact model ID (/pr-agent-setup scaffolds it)
+# The job is skipped while LLM_API_KEY is empty, so the check never goes red
+# before the repo is configured.
+#
+# Use a chat completions endpoint. OpenCode Zen serves some models over
+# /responses only, which PR-Agent cannot call.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main, master, develop]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: pr-agent-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr_agent_job:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+    steps:
+      - name: PR Agent
+        if: ${{ env.LLM_API_KEY != '' }}
+        # Pinned to the main commit of 2026-10-20 (b4c3d11). Bump it
+        # deliberately in review; a mutable @main receives this job's secrets.
+        uses: the-pr-agent/pr-agent@b4c3d11d2247dce6f716074c5352c3f97d6564df
+        env:
+          OPENAI__API_BASE: ${{ secrets.LLM_API_BASE }}
+          OPENAI__KEY: ${{ secrets.LLM_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Not configured
+        if: ${{ env.LLM_API_KEY == '' }}
+        run: echo "::notice::LLM_API_KEY is not set; skipping PR-Agent. The local gate still applies."

@@ -19,17 +19,19 @@ Run the repo's checks. `/test` owns the suite for uncommitted changes; `/develop
 
 Assemble before/after evidence. `/check verify` drives the real app against the spec; UI proof via `before-and-after` (numbers/output pairs otherwise).
 
-## 4. Review loop and commit
+## 4. Code review, Kodus, commit
 
-Kodus loop to clean (no high/critical — full loop in the `kodus-review` skill), then commit (conventional commits), rebase on `origin/main`, rerun checks.
+`/code-review` first (full protocol in the `code-review` skill): the local gate on a model from a different family than the author, findings only, confidence 80, chunked for a 200k window. The reviewer never edits code; hand the findings to the implementer, rerun the repo checks, rerun the review, at most twice. A third failed round goes to the human.
+
+Then the Kodus loop to clean (no high/critical — full loop in the `kodus-review` skill). Only after both, commit (conventional commits), rebase on `origin/main`, rerun checks. The order is fixed: review, Kodus, commit.
 
 ## 5. Push and PR
 
-Push, open PR: what changed, how tested (every claim evidenced), before/after proof, risks/follow-ups. `/check review` first (fresh-model review after verify, before PR prose); `/document` drafts the text from the real diff after the living-docs update. `/unslop` on title + body.
+Push, open PR: what changed, how tested (every claim evidenced), before/after proof, risks/follow-ups. Sync the local review to the PR with `node <skill>/scripts/post-review.mjs --apply` (one sticky comment, updated in place). Then `/check review` for the quick single pass, `/document` for the prose from the real diff, `/unslop` on title + body.
 
 ## 6. Reviews to zero
 
-`/review` + `/pr-agent` + Kodus to zero comments. Present the PR URL.
+`/review` + `/pr-agent` + Kodus to zero comments. The Kodus and PR-Agent GitHub workflows are the last resort outside OpenCode, not a substitute for the local gate. Present the PR URL.
 
 ## 7. Close
 

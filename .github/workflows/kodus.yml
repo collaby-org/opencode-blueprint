@@ -1,0 +1,58 @@
+name: Kodus Review
+
+# Last resort, outside OpenCode. The local /code-review gate and the local
+# Kodus loop run first; this catches what they missed, on the PR itself.
+#
+# Opt in per repository:
+#   1. gh secret set KODUS_TEAM_KEY   (team key from app.kodus.io)
+#   2. the step is skipped while the secret is empty, so the check never goes
+#      red before the repo is configured.
+#
+# The CLI prints findings to the job log and exits non zero on error. No PR
+# comment is posted from here: the local review already owns the sticky
+# comment, and this workflow must not race it.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main, master, develop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kodus-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  kodus:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      KODUS_TEAM_KEY: ${{ secrets.KODUS_TEAM_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Kodus CLI
+        if: ${{ env.KODUS_TEAM_KEY != '' }}
+        run: npm install -g @kodus/cli@0.4.21
+
+      - name: Review the pull request diff
+        if: ${{ env.KODUS_TEAM_KEY != '' }}
+        # Pass the ref through env, never straight into the script: a branch
+        # name is attacker-controlled and would otherwise become shell syntax.
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: kodus review --branch "origin/$BASE_REF" --fail-on error
+
+      - name: Not configured
+        if: ${{ env.KODUS_TEAM_KEY == '' }}
+        run: echo "::notice::KODUS_TEAM_KEY is not set; skipping the Kodus review. The local gate still applies."
