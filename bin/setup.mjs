@@ -4,7 +4,7 @@
 //   npx opencode-blueprint            # full install
 //   npx opencode-blueprint --dry-run  # print what would happen
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, copyFileSync, cpSync, rmSync, readFileSync, writeFileSync, readdirSync, statSync, lstatSync } from "node:fs";
+import { existsSync, mkdirSync, copyFileSync, cpSync, rmSync, readFileSync, writeFileSync, readdirSync, lstatSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, dirname, delimiter } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -413,8 +413,18 @@ backup(join(TARGET, "opencode.jsonc"));
 backup(join(TARGET, "AGENTS.md"));
 // Content comparison that ignores line endings: a Windows checkout can turn
 // LF into CRLF, and that is not a user edit.
-const sameContent = (a, b) =>
-  readFileSync(a, "utf8").replace(/\r\n/g, "\n") === readFileSync(b, "utf8").replace(/\r\n/g, "\n");
+const sameContent = (a, b) => {
+  try {
+    return (
+      readFileSync(a, "utf8").replace(/\r\n/g, "\n") ===
+      readFileSync(b, "utf8").replace(/\r\n/g, "\n")
+    );
+  } catch {
+    // A file that cannot be read (locked, deleted between the check and the
+    // read) is not identical to anything: it is kept, not fatal.
+    return false;
+  }
+};
 
 // Copy a file, and never let one bad destination abort the install.
 const copyOrKeep = (from, to) => {
@@ -657,11 +667,11 @@ if (!pluginsDirReady) {
   log(`  skip the plugin dependencies (${pluginsDir} is not ours to write into)`);
 } else {
   run("npm", ["install", "--prefix", pluginPrefix("opencode-review"), "@opencode-ai/plugin"]);
-// opencode-dcp is a vendored npm tree (deps pinned in its package.json):
-// production-only install. --legacy-peer-deps works around an upstream
-// dev-tree conflict (dev @opencode/plugin wants @opentui/core >=0.5.14
-// while the package pins ^0.4.5); --omit=dev keeps the 0.4.x runtime the
-// TUI entry was built against. No version upgrades beyond the pins.
+  // opencode-dcp is a vendored npm tree (deps pinned in its package.json):
+  // production-only install. --legacy-peer-deps works around an upstream
+  // dev-tree conflict (dev @opencode/plugin wants @opentui/core >=0.5.14
+  // while the package pins ^0.4.5); --omit=dev keeps the 0.4.x runtime the
+  // TUI entry was built against. No version upgrades beyond the pins.
   run("npm", ["install", "--prefix", pluginPrefix("opencode-dcp"), "--omit=dev", "--legacy-peer-deps", "--no-audit", "--no-fund"]);
   // Ported plugins (deps pinned in each package.json) — same production flags.
   // opencode-mem is NOT here: it installs into the config home, because the Bun
@@ -713,7 +723,8 @@ if (skillsRootReady) {
   skillsRootReady = ensureDir(SKILLS_DIR);
 } else {
   log(`  keep ${SKILLS_DIR} (a link or a file; the global skills are not installed)`);
-}// `npx` resolves `node` from PATH, so a machine-wide Node 20 makes the
+}
+// `npx` resolves `node` from PATH, so a machine-wide Node 20 makes the
 // skills CLI (which needs Node >= 22.20 for fs/promises.glob) crash on EVERY
 // entry. Resolve a newer runtime and put its directory FIRST on PATH for the
 // duration of the install loop only.
@@ -785,11 +796,17 @@ if (has("python")) {
     try {
       const scripts = execFileSync("python", ["-c", "import sysconfig; print(sysconfig.get_path('scripts'))"], { encoding: "utf8" }).trim();
       const exe = join(scripts, "redis-mcp-server.exe");
-      const cfgPath = join(TARGET, "opencode.jsonc");
-      // JSONC-aware: JSON.parse throws on this file's comments, and a
-      // JSON.stringify round-trip would strip them.
-      replaceMcpCommand(cfgPath, "redis", [process.execPath, join(TARGET, "tools", "mcp-env.mjs"), exe, "--url", "@REDIS_URL@"]);
-      log(`  redis MCP -> ${exe}`);
+      // The entry must not point at an exe that was never installed: a failed
+      // pip install leaves the repo's absolute paths in place.
+      if (!existsSync(exe)) {
+        log(`  warn: ${exe} missing after install — redis MCP left at the repo's absolute paths`);
+      } else {
+        const cfgPath = join(TARGET, "opencode.jsonc");
+        // JSONC-aware: JSON.parse throws on this file's comments, and a
+        // JSON.stringify round-trip would strip them.
+        replaceMcpCommand(cfgPath, "redis", [process.execPath, join(TARGET, "tools", "mcp-env.mjs"), exe, "--url", "@REDIS_URL@"]);
+        log(`  redis MCP -> ${exe}`);
+      }
     } catch (e) {
       log(`  warn: could not repoint redis MCP (${e.message})`);
     }
