@@ -39,17 +39,23 @@ function readJson(path) {
   }
 }
 
+// The plugin server does not start in the project directory, so `process.cwd()`
+// can point at the opencode config home instead of the checkout. Resolve the
+// project root from the plugin context in `setup` and use it for git and the
+// per-repo review config.
+let projectRoot = process.cwd();
+
 function reviewConfig() {
   return {
     ...(readJson(join(homedir(), ".config", "opencode", "review.json")) || {}),
-    ...(readJson(join(process.cwd(), ".opencode", "review.json")) || {}),
+    ...(readJson(join(projectRoot, ".opencode", "review.json")) || {}),
   };
 }
 
 function git(args) {
   try {
     return execFileSync("git", args, {
-      cwd: process.cwd(),
+      cwd: projectRoot,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
       maxBuffer: 8 * 1024 * 1024,
@@ -581,6 +587,9 @@ export function isPrCreate(command: string): boolean {
 export default define({
   id: "opencode-code-review",
   async setup(ctx) {
+    const directory = (ctx as unknown as { directory?: string }).directory;
+    if (directory) projectRoot = directory;
+
     await ctx.agent.transform((draft) => {
       draft.update("code-review", (agent) => {
         agent.mode = "primary";

@@ -9,6 +9,16 @@ Version 1.0.0 was published to npm but never got a git tag, so it has no tag
 range. The npm publish timestamps are UTC and can sit a day earlier than the
 commit date of the same version.
 
+## [1.3.3] - 2026-10-20
+
+### Fixed
+
+- The gate resolves the project root from the plugin context instead of
+  `process.cwd()`, which points at the opencode config home when the server
+  starts outside the checkout. `gh pr create` now finds
+  `.git/code-review/last-result.json` and the per-repo `.opencode/review.json`;
+  before this, the gate reported "no review artifact" even after a clean run.
+
 ## [1.3.2] - 2026-10-20
 
 ### Fixed
@@ -24,7 +34,7 @@ commit date of the same version.
 
 ## [1.3.1] - 2026-10-20
 
-Review fixes for 1.3.0. The branch lands as 1.3.2.
+Review fixes for 1.3.0. The branch lands as 1.3.3.
 
 ### Fixed
 
