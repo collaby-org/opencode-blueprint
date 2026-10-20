@@ -46,11 +46,13 @@ commit date of the same version.
   file, a command the user changed is kept and backed up, and a file, a
   directory or a link in the way is kept with a log instead of aborting the
   install half way.
-- The installer deploys the shipped files only when they are missing, so a
-  user's own copy is never overwritten by the installer. A shipped command
-  that changed in a new release therefore lands on a fresh install only;
-  delete the file to take the new one. The vendored skills are the exception:
-  their shipped files are versioned content and are replaced on every install.
+- The installer deploys the files that can hold user content only when they are
+  missing, so a user's own copy is never overwritten by the installer:
+  `.env.example`, `.env`, the slim config, the agent files and the commands. A
+  shipped command that changed in a new release therefore lands on a fresh
+  install only; delete the file to take the new one. `opencode.jsonc`,
+  `AGENTS.md`, `plugins/` and the vendored skills are versioned content and are
+  replaced on every install.
 - The report, the pull request comment and the gate message name the real
   reason a review is incomplete: a plan that outran the agent budget reads
   differently from an agent that did not report.

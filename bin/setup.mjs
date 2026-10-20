@@ -310,6 +310,34 @@ const dirReady = (dir) => {
     return true;
   }
 };
+// Every filesystem operation that can fail on a path the user owns is wrapped:
+// the installer keeps going and says what it skipped, instead of dying with a
+// half installed config home.
+const rmSafe = (p) => {
+  try {
+    rmSync(p, { recursive: true, force: true });
+    return true;
+  } catch {
+    log(`  keep ${p} (cannot be removed)`);
+    return false;
+  }
+};
+const readDirSafe = (dir) => {
+  try {
+    if (!lstatSync(dir).isDirectory()) return [];
+    return readdirSync(dir);
+  } catch {
+    return [];
+  }
+};
+const readTextSafe = (p) => {
+  try {
+    if (!isRegular(p)) return null;
+    return readFileSync(p, "utf8");
+  } catch {
+    return null;
+  }
+};
 ensureDir(TARGET);
 ensureDir(join(TARGET, "commands"));
 ensureDir(join(TARGET, "plugins"));
@@ -416,7 +444,7 @@ const cp = (src, dest) => {
       } catch {
         // Fall through to the copy.
       }
-      rmSync(dest, { recursive: true, force: true });
+      rmSafe(dest);
     }
     try {
       cpSync(src, dest, { recursive: true });
@@ -499,8 +527,8 @@ for (const entry of readdirSync(agentsSrc, { withFileTypes: true })) {
 // nothing but the exact file this installer shipped; anything else belongs to
 // the user and is left alone.
 const legacyAgentDir = join(TARGET, "agent");
-if (existsSync(legacyAgentDir)) {
-  const legacyEntries = readdirSync(legacyAgentDir);
+if (existsAny(legacyAgentDir)) {
+  const legacyEntries = readDirSafe(legacyAgentDir);
   const legacyFile = join(legacyAgentDir, "orchestrator.md");
   const shippedAgent = join(agentsSrc, "orchestrator.md");
   const isShippedCopy =
@@ -509,27 +537,45 @@ if (existsSync(legacyAgentDir)) {
     existsSync(shippedAgent) &&
     sameContent(legacyFile, shippedAgent);
   if (isShippedCopy) {
-    rmSync(legacyAgentDir, { recursive: true, force: true });
+    rmSafe(legacyAgentDir);
     log(`  removed ${legacyAgentDir} (V2 reads agents/)`);
   } else {
     log(`  keep ${legacyAgentDir} (not the file this installer shipped; V2 ignores it, remove it yourself)`);
   }
 }
-cp(join(REPO, "config", "plugins", "opencode-review"), join(TARGET, "plugins", "opencode-review"));
-cp(join(REPO, "config", "plugins", "opencode-code-review"), join(TARGET, "plugins", "opencode-code-review"));
-cp(join(REPO, "config", "plugins", "opencode-dcp"), join(TARGET, "plugins", "opencode-dcp"));
-cp(join(REPO, "config", "plugins", "opencode-github-release"), join(TARGET, "plugins", "opencode-github-release"));
-cp(join(REPO, "config", "plugins", "opencode-telemetry"), join(TARGET, "plugins", "opencode-telemetry"));
-cp(join(REPO, "config", "plugins", "envsitter-guard"), join(TARGET, "plugins", "envsitter-guard"));
-cp(join(REPO, "config", "plugins", "opencode-log-sanitizer"), join(TARGET, "plugins", "opencode-log-sanitizer"));
-cp(join(REPO, "config", "plugins", "opencode-command-inject"), join(TARGET, "plugins", "opencode-command-inject"));
-cp(join(REPO, "config", "plugins", "opencode-ralph-wiggum"), join(TARGET, "plugins", "opencode-ralph-wiggum"));
-cp(join(REPO, "config", "plugins", "opencode-mem"), join(TARGET, "plugins", "opencode-mem"));
+// The plugins directory is a plain copy, but a link or a file in the way must
+// not be written through.
+const pluginsDir = join(TARGET, "plugins");
+const pluginsDirReady = dirReady(pluginsDir);
+if (!pluginsDirReady) log(`  keep ${pluginsDir} (a link or a file; not ours to write through)`);
+for (const plugin of [
+  "opencode-review",
+  "opencode-code-review",
+  "opencode-dcp",
+  "opencode-github-release",
+  "opencode-telemetry",
+  "envsitter-guard",
+  "opencode-log-sanitizer",
+  "opencode-command-inject",
+  "opencode-ralph-wiggum",
+  "opencode-mem",
+]) {
+  if (!pluginsDirReady) {
+    log(`  skip ${join(pluginsDir, plugin)} (the plugins directory is not ours to write into)`);
+    continue;
+  }
+  cp(join(REPO, "config", "plugins", plugin), join(pluginsDir, plugin));
+}
 // mcp-env wrapper: loads <config>/.env and expands {env:...} for local MCP
 // servers, because OpenCode's own expansion reads only its process
 // environment. Without it DATABASE_URL / REDIS_URL arrive empty.
-if (!DRY) mkdirSync(join(TARGET, "tools"), { recursive: true });
-cp(join(REPO, "config", "tools", "mcp-env.mjs"), join(TARGET, "tools", "mcp-env.mjs"));
+const toolsDir = join(TARGET, "tools");
+const toolsDirReady = dirReady(toolsDir);
+if (!toolsDirReady) log(`  keep ${toolsDir} (a link or a file; not ours to write through)`);
+else {
+  if (!DRY) ensureDir(toolsDir);
+  cp(join(REPO, "config", "tools", "mcp-env.mjs"), join(toolsDir, "mcp-env.mjs"));
+}
 // Copy .env.example as a starter template only — never overwrite an existing
 // (possibly filled-in) .env.example in TARGET.
 const envExampleDest = join(TARGET, ".env.example");
@@ -584,20 +630,38 @@ for (const name of ["opencode-github-release", "opencode-telemetry", "envsitter-
 // back to a stale central copy and fail with "Cannot find package".
 const centralPkgPath = join(TARGET, "package.json");
 let centralPkg = {};
-if (existsSync(centralPkgPath)) {
-  centralPkg = JSON.parse(readFileSync(centralPkgPath, "utf8"));
+const centralPkgText = readTextSafe(centralPkgPath);
+if (centralPkgText !== null) {
+  try {
+    centralPkg = JSON.parse(centralPkgText);
+  } catch {
+    log(`  keep ${centralPkgPath} (not valid JSON; the dependencies are not merged)`);
+    centralPkg = {};
+  }
+} else if (existsAny(centralPkgPath)) {
+  log(`  keep ${centralPkgPath} (not a regular file; the dependencies are not merged)`);
 }
 centralPkg.dependencies = {
   ...(centralPkg.dependencies || {}),
   "@opencode-ai/plugin": "^1.19.1",
   "opencode-mem": "2.32.0",
 };
-if (!DRY) writeFileSync(centralPkgPath, JSON.stringify(centralPkg, null, 2) + "\n");
-else log(`  write ${centralPkgPath} (merge @opencode-ai/plugin into dependencies)`);
+if (!DRY) {
+  try {
+    writeFileSync(centralPkgPath, JSON.stringify(centralPkg, null, 2) + "\n");
+  } catch {
+    log(`  keep ${centralPkgPath} (cannot be written)`);
+  }
+} else log(`  write ${centralPkgPath} (merge @opencode-ai/plugin into dependencies)`);
 run("npm", ["install", "--prefix", TARGET, "--no-audit", "--no-fund"]);
 
 log("== 4/6 skills (global, agent=opencode) ==");
-mkdirSync(SKILLS_DIR, { recursive: true });
+const skillsRootReady = dirReady(SKILLS_DIR);
+if (!skillsRootReady) {
+  log(`  keep ${SKILLS_DIR} (a link or a file; the global skills are not installed)`);
+} else {
+  mkdirSync(SKILLS_DIR, { recursive: true });
+}
 // `npx` resolves `node` from PATH, so a machine-wide Node 20 makes the
 // skills CLI (which needs Node >= 22.20 for fs/promises.glob) crash on EVERY
 // entry. Resolve a newer runtime and put its directory FIRST on PATH for the
@@ -617,6 +681,10 @@ const skillsPath = process.env.PATH || "";
 process.env.PATH = `${dirname(skillsNode.exe)}${delimiter}${skillsPath}`;
 try {
   for (const [repo, skills] of SKILLS) {
+    if (!skillsRootReady) {
+      log(`  skip ${repo} (the global skills directory is not ours to write into)`);
+      continue;
+    }
     const args = ["-y", "skills", "add", repo];
     for (const s of skills) args.push("-s", s);
     args.push("-a", "opencode", "-g", "-y");
@@ -639,6 +707,10 @@ const VENDORED_SKILLS = ["architect", "audit", "check", "code-review", "debug", 
 for (const name of VENDORED_SKILLS) {
   const src = join(REPO, "skills", name);
   const dest = join(SKILLS_DIR, name);
+  if (!skillsRootReady) {
+    log(`  skip skills/${name} (the global skills directory is not ours to write into)`);
+    continue;
+  }
   if (!existsSync(src)) {
     log(`  skip skills/${name} (not in repo skills/)`);
     continue;
