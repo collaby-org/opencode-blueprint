@@ -287,9 +287,32 @@ for (const c of ["gh", "python", "pipx"]) if (!has(c)) log(`  warn: ${c} not fou
 log("  ok");
 
 log("== 2/6 config files ==");
-mkdirSync(TARGET, { recursive: true });
-mkdirSync(join(TARGET, "commands"), { recursive: true });
-mkdirSync(join(TARGET, "plugins"), { recursive: true });
+// A directory that cannot be created (a link, a path that is a file, a locked
+// entry) is not ours to replace: skip it with a log instead of aborting the
+// install half way.
+const ensureDir = (dir) => {
+  try {
+    mkdirSync(dir, { recursive: true });
+    return true;
+  } catch {
+    log(`  keep ${dir} (cannot create the directory)`);
+    return false;
+  }
+};
+// Whether the directory can hold the shipped files: a link or a file in the
+// way cannot, and a path that does not exist yet can.
+const dirReady = (dir) => {
+  try {
+    const stat = lstatSync(dir);
+    if (stat.isSymbolicLink()) return false;
+    return stat.isDirectory();
+  } catch {
+    return true;
+  }
+};
+ensureDir(TARGET);
+ensureDir(join(TARGET, "commands"));
+ensureDir(join(TARGET, "plugins"));
 const backup = (p) => {
   if (existsSync(p) && !DRY) copyFileSync(p, `${p}.bak-${Date.now()}`);
 };
@@ -395,7 +418,11 @@ const cp = (src, dest) => {
       }
       rmSync(dest, { recursive: true, force: true });
     }
-    cpSync(src, dest, { recursive: true });
+    try {
+      cpSync(src, dest, { recursive: true });
+    } catch {
+      log(`  keep ${dest} (cannot be written)`);
+    }
   }
 };
 cp(join(REPO, "config", "opencode.jsonc"), join(TARGET, "opencode.jsonc"));
@@ -405,7 +432,11 @@ cp(join(REPO, "AGENTS.md"), join(TARGET, "AGENTS.md"));
 // backup, and never remove a file this installer did not put there.
 const cpDirIfMissing = (src, dest) => {
   log(`  copy ${src} -> ${dest} (missing files only)`);
-  if (!DRY) mkdirSync(dest, { recursive: true });
+  if (!dirReady(dest)) {
+    log(`  keep ${dest} (cannot create the directory)`);
+    return;
+  }
+  if (!DRY && !ensureDir(dest)) return;
   for (const entry of readdirSync(src, { withFileTypes: true })) {
     if (!entry.isFile()) continue;
     const from = join(src, entry.name);
@@ -438,9 +469,14 @@ cpDirIfMissing(join(REPO, "config", "commands"), join(TARGET, "commands"));
 // from the shipped one is kept and backed up, never overwritten.
 const agentsSrc = join(REPO, "config", "agents");
 const agentsDest = join(TARGET, "agents");
-if (!DRY) mkdirSync(agentsDest, { recursive: true });
+const agentsDirReady = dirReady(agentsDest);
+if (agentsDirReady && !DRY) ensureDir(agentsDest);
 for (const entry of readdirSync(agentsSrc, { withFileTypes: true })) {
   if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+  if (!agentsDirReady) {
+    log(`  skip ${join(agentsDest, entry.name)} (the agents directory could not be created)`);
+    continue;
+  }
   const src = join(agentsSrc, entry.name);
   const dest = join(agentsDest, entry.name);
   if (existsAny(dest)) {

@@ -131,7 +131,9 @@ The constraints that must hold at runtime:
   `AGENTS.md` and `plugins/` are versioned content and are overwritten, and
   the first two are backed up before that. `commands/` is merged: a missing
   shipped command is written, a command the user changed is kept with a backup,
-  and a command the installer did not put there is never removed. The vendored
+  and a command the installer did not put there is never removed. A shipped
+  command that changed in a new release therefore lands on a fresh install
+  only; delete the file to take the new one. The vendored
   skills are merged the other way round: the shipped files are versioned
   content and are replaced, a file the user added to a skill is kept.
 - The skill install runs through the `skills` CLI, which rewrites `SKILL.md`
