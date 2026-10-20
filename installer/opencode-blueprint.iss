@@ -61,9 +61,11 @@ Source: "finish-note.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Live deployment to the opencode config home. uninsneveruninstall: uninstalling
 ; the installer must never delete the user's live opencode config.
-; The shipped files are deployed only when they are missing, so the user's own
-; copy is still there for the post-install step to back up before it replaces
-; it. A command the installer did not ship is never removed.
+; The shipped files that can hold user content are deployed only when they
+; are missing, so the user's own copy is still there for the post-install step
+; to back up before it replaces it. plugins/ deploys verbatim (versioned
+; content, unlike .env.example). A command the installer did not ship is
+; never removed.
 Source: "..\AGENTS.md"; DestDir: "{code:GetConfigHome}"; Flags: ignoreversion uninsneveruninstall onlyifdoesntexist
 Source: "..\config\opencode.jsonc"; DestDir: "{code:GetConfigHome}"; Flags: ignoreversion uninsneveruninstall onlyifdoesntexist
 Source: "..\config\commands\*"; DestDir: "{code:GetConfigHome}\commands"; Flags: ignoreversion recursesubdirs createallsubdirs uninsneveruninstall onlyifdoesntexist

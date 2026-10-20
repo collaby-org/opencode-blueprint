@@ -110,3 +110,8 @@ it, a missing PR is a normal skip: the local gate runs before the PR exists.
   current head, `gh pr create` is blocked with the reason and the escape that
   applied (a draft PR, `enforce_pr_gate: false`, or a single command prefixed
   with `CODE_REVIEW_SKIP=1`).
+- **A review is incomplete for one of two reasons**, and the report, the pull
+  request comment and the gate message each name the one that applies: the plan
+  had more chunks than the agent budget, so the tail chunk never had a
+  reviewer; or not every reviewer reported. Either way `complete` is false and
+  the gate blocks the pull request.

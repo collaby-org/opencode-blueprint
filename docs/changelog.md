@@ -59,7 +59,8 @@ commit date of the same version.
   no longer writes the gate's report path, the Kodus command and the PR-Agent
   scaffold match the skills they duplicate, and the opencode GitHub skill no
   longer promises workflow files that do not exist.
-- `docs/conventions.md` now exists; ten skills referenced it.
+- `docs/conventions.md` now exists; nine skills referenced it (audit, architect,
+  check, debug, develop, document, scope, sync, test).
 
 ## [1.3.5] - 2026-10-20
 
