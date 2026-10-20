@@ -104,5 +104,6 @@ it, a missing PR is a normal skip: the local gate runs before the PR exists.
 - **A truncated chunk is a known limitation.** It is counted in the report.
   The orchestrator tells the human which file needs a manual read.
 - **The gate fails closed.** If the plugin cannot read a valid result for the
-  current head, `gh pr create` is blocked with the reason and the escape hatch
-  (a draft PR, or `enforce_pr_gate: false`).
+  current head, `gh pr create` is blocked with the reason and the escape that
+  applied (a draft PR, `enforce_pr_gate: false`, or a single command prefixed
+  with `CODE_REVIEW_SKIP=1`).

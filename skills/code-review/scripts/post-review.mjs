@@ -103,17 +103,36 @@ function main() {
   const report = redact(readFileSync(reportPath, "utf8")).trim();
   if (!report) out({ error: `report is empty: ${reportPath}` }, 1);
 
+  const detail = (error) =>
+    String(error && error.stderr ? error.stderr : error && error.message ? error.message : error)
+      .trim()
+      .slice(0, 800);
+
   let repo;
-  let pr;
   try {
     repo = gh(["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"], cwd);
+  } catch (error) {
+    const message = detail(error);
+    // A repository with no GitHub remote has no PR to sync to; that is a
+    // normal skip. An unusable gh (missing, logged out, network) is not.
+    if (/no git remotes|not a git repository|none of the git remotes|could not determine/i.test(message)) {
+      out({ posted: false, reason: "no-pr", detail: message });
+    }
+    out({ error: "gh repo view failed", detail: message }, 1);
+  }
+
+  let pr;
+  try {
     const prArgs = ["pr", "view", "--json", "number,url,headRefOid,state"];
     if (args.pr) prArgs.push(args.pr);
     pr = JSON.parse(gh(prArgs, cwd));
   } catch (error) {
-    const message = String(error && error.stderr ? error.stderr : error && error.message ? error.message : error);
-    if (args.requirePr) out({ error: "no pull request for this branch", detail: message.trim().slice(0, 800) }, 3);
-    out({ posted: false, reason: "no-pr", detail: message.trim().slice(0, 800) });
+    const message = detail(error);
+    if (!/no pull requests found/i.test(message)) {
+      out({ error: "gh pr view failed", detail: message }, 1);
+    }
+    if (args.requirePr) out({ error: "no pull request for this branch", detail: message }, 3);
+    out({ posted: false, reason: "no-pr", detail: message });
   }
 
   const head = String(result.head || "");

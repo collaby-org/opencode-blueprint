@@ -53,6 +53,12 @@ reviewing code that already moved. The one exception: a draft PR may be opened
 before the review, because drafts exist for early CI. The plugin gate allows
 drafts and blocks everything else.
 
+The gate has three deliberate escape hatches and no others: a draft PR;
+`enforce_pr_gate: false` in `.opencode/review.json` for a repository that opts
+out; and `CODE_REVIEW_SKIP=1 gh pr create ...`, which exempts exactly the
+command it precedes. The plugin records which one applied in its verdict
+reason, so an ungated creation is always explainable from the log.
+
 The review runs on the working tree, before the commit, so the artifact records
 the HEAD it was built on top of. Committing that same tree as the next commit
 keeps the artifact valid — the gate accepts a review made in `uncommitted` mode

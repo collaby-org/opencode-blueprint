@@ -10,8 +10,9 @@ import { join } from "node:path";
 // read only status tool, and enforces the local review gate on `gh pr create`.
 //
 // The gate is the point: instructions can be skipped, a hook cannot. It fails
-// closed, with a clear reason and two deliberate escape hatches (a draft PR,
-// or `enforce_pr_gate: false` in review.json).
+// closed, with a clear reason and three deliberate escape hatches: a draft PR,
+// `enforce_pr_gate: false` in review.json, and `CODE_REVIEW_SKIP=1` before a
+// single command (the verdict names which one applied).
 
 const COMMAND_TEMPLATE = `Run the code review gate for this change.
 
@@ -191,7 +192,12 @@ const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
 // Wrappers that execute their arguments. `env FOO=1 gh ...` and
 // `command gh ...` are still invocations of gh; the prefix travels with the
 // invocation so `CODE_REVIEW_SKIP=1` can only exempt the command it precedes.
-const WRAPPERS = new Set(["env", "command", "nohup", "time", "sudo"]);
+// The list covers the wrappers a person actually types in front of a command,
+// not only the POSIX five: `timeout 30 gh ...` and `nice -n 5 gh ...` run gh.
+const WRAPPERS = new Set([
+  "env", "command", "nohup", "time", "sudo", "doas", "pkexec",
+  "timeout", "nice", "setsid", "stdbuf", "flock", "chrt", "ionice", "taskset",
+]);
 // Wrapper options that consume the following word, per wrapper. They are not
 // interchangeable: `sudo -p` takes a prompt, but `time -p` is a Boolean, and
 // treating it as value-taking would swallow `gh` and hide the invocation.
@@ -202,9 +208,33 @@ const WRAPPER_VALUE_FLAGS: Record<string, Set<string>> = {
     "-U", "--other-user", "-C", "--close-from", "-r", "--role", "-t", "--type",
     "-D", "--chdir",
   ]),
+  doas: new Set(["-u", "-C"]),
+  pkexec: new Set(["--user"]),
   time: new Set(["-o", "--output", "-f", "--format"]),
+  timeout: new Set(["-k", "--kill-after", "-s", "--signal"]),
+  nice: new Set(["-n", "--adjustment"]),
+  setsid: new Set(),
+  stdbuf: new Set(["-i", "--input", "-o", "--output", "-e", "--error"]),
+  flock: new Set(["-w", "--timeout", "-E", "--conflict-exit-code"]),
+  chrt: new Set(["-T", "--sched-runtime", "-P", "--sched-period", "-D", "--sched-deadline"]),
+  ionice: new Set(["-c", "--class", "-n", "--classdata"]),
+  taskset: new Set(["-c", "--cpu-list"]),
   command: new Set(),
   nohup: new Set(),
+};
+// Wrappers with a leading positional that is not the command. `timeout 30 gh`
+// spends one word on the duration before the command; `flock /tmp/l gh` spends
+// one on the lock file; `chrt -f 50 gh` and `taskset 3 gh` one each.
+const WRAPPER_POSITIONAL: Record<string, number> = {
+  timeout: 1,
+  flock: 1,
+  chrt: 1,
+  taskset: 1,
+};
+// `flock /tmp/l -c "gh pr create"` runs the value as a shell string, the same
+// way `bash -c` does. The payload goes back through the parser.
+const WRAPPER_PAYLOAD_FLAGS: Record<string, Set<string>> = {
+  flock: new Set(["-c", "--command"]),
 };
 const SHELLS = new Set(["bash", "sh", "zsh", "dash", "pwsh", "powershell", "cmd", "cmd.exe"]);
 // ssh options that consume the following word, so the host can be located.
@@ -258,9 +288,10 @@ function commandName(word: string): string {
 
 // Strip assignments and wrappers so the first remaining word is the command
 // that actually runs. The stripped prefix is kept for the skip escape hatch.
-function commandStart(words: string[]): { prefix: string[]; words: string[] } {
+function commandStart(words: string[]): { prefix: string[]; words: string[]; payload?: string } {
   let i = 0;
   const prefix: string[] = [];
+  let payload: string | undefined;
   const takeAssignments = () => {
     while (i < words.length && ASSIGNMENT.test(words[i])) {
       prefix.push(words[i]);
@@ -273,16 +304,43 @@ function commandStart(words: string[]): { prefix: string[]; words: string[] } {
     prefix.push(words[i]);
     i += 1;
     const valueFlags = WRAPPER_VALUE_FLAGS[wrapper] || new Set<string>();
-    while (i < words.length && words[i].startsWith("-")) {
-      const flag = words[i];
-      prefix.push(flag);
-      i += 1;
-      if (flag === "--") break;
-      if (valueFlags.has(flag) && !flag.includes("=") && i < words.length) {
-        prefix.push(words[i]);
+    const payloadFlags = WRAPPER_PAYLOAD_FLAGS[wrapper] || new Set<string>();
+    // `taskset -c 0-3 gh` carries the CPU list as a flag value; only the
+    // `taskset 0x3 gh` mask form has a positional to skip.
+    let skip = WRAPPER_POSITIONAL[wrapper] || 0;
+    const consumeFlags = () => {
+      while (i < words.length && words[i].startsWith("-")) {
+        const flag = words[i];
+        if (
+          wrapper === "taskset" &&
+          (flag === "-c" || flag === "--cpu-list" || flag.startsWith("--cpu-list="))
+        ) {
+          skip = 0;
+        }
+        prefix.push(flag);
         i += 1;
+        if (flag === "--") break;
+        if (payloadFlags.has(flag) && i < words.length) {
+          payload = words[i];
+          prefix.push(words[i]);
+          i += 1;
+          return;
+        }
+        if (valueFlags.has(flag) && !flag.includes("=") && i < words.length) {
+          prefix.push(words[i]);
+          i += 1;
+        }
       }
+    };
+    consumeFlags();
+    // `timeout 30 gh` and `flock /tmp/l gh` spend a positional before the
+    // command; options may also follow that positional (`flock /tmp/l -c ...`).
+    for (let n = 0; n < skip && i < words.length && !words[i].startsWith("-"); n += 1) {
+      prefix.push(words[i]);
+      i += 1;
     }
+    if (skip > 0) consumeFlags();
+    if (payload !== undefined) break;
     takeAssignments();
   }
   let rest = words.slice(i);
@@ -291,7 +349,7 @@ function commandStart(words: string[]): { prefix: string[]; words: string[] } {
   while (rest.length > 0 && /^[({!]+$/.test(rest[0])) rest = rest.slice(1);
   if (rest.length > 0) rest[0] = rest[0].replace(/^[({!]+/, "");
   if (rest.length > 0) rest[rest.length - 1] = rest[rest.length - 1].replace(/\)+$/, "");
-  return { prefix, words: rest };
+  return { prefix, words: rest, payload };
 }
 
 // Every invocation of `gh pr create` in the command. All of them are
@@ -300,7 +358,13 @@ function commandStart(words: string[]): { prefix: string[]; words: string[] } {
 function ghInvocations(text: string, depth = 0): GhInvocation[] {
   const found: GhInvocation[] = [];
   for (const segment of commandWords(stripSubstitutions(text))) {
-    const { prefix, words } = commandStart(segment);
+    const { prefix, words, payload } = commandStart(segment);
+    // `flock /tmp/l -c "gh pr create"` carries its command in an argument.
+    if (payload !== undefined && depth < 2) {
+      for (const invocation of ghInvocations(payload, depth + 1)) {
+        found.push({ prefix: [...prefix, ...invocation.prefix], args: invocation.args });
+      }
+    }
     if (words.length === 0) continue;
 
     const name = commandName(words[0]);

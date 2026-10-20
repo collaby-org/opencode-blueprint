@@ -9,6 +9,38 @@ Version 1.0.0 was published to npm but never got a git tag, so it has no tag
 range. The npm publish timestamps are UTC and can sit a day earlier than the
 commit date of the same version.
 
+## [1.3.1] - 2026-10-20
+
+Review fixes for 1.3.0. The branch lands as 1.3.1.
+
+### Fixed
+
+- Review gate: `timeout`, `nice`, `setsid`, `stdbuf`, `flock`, `chrt`,
+  `ionice`, `taskset`, `doas` and `pkexec` no longer hide `gh pr create`;
+  `flock -c` payloads are parsed. `CODE_REVIEW_SKIP=1`, the third escape
+  hatch, is documented in the plugin header, the skill and `AGENTS.md`.
+- Installer repoints keep the `mcp-env` wrapper and `@NAME@` placeholders for
+  postgres, mongodb, redis and google-analytics; kubernetes no longer gets the
+  HTTP-only `--log-file` flag.
+- `reconcile-review.mjs` derives the expected reviewer count from the plan and
+  fails closed instead of accepting a missing findings file.
+- `post-review.mjs` reports a broken or unauthenticated `gh` as a failure, not
+  as "no PR".
+- `mcp-env.mjs` lets a non-empty exported variable win over a stale `.env`
+  line, so credential rotation works.
+- `kodus.yml` pins checkout and setup-node to commit SHAs.
+- Redis MCP uses `@REDIS_URL@`: the host expands `{env:REDIS_URL}` to an empty
+  string before the wrapper starts.
+- Restored the `orchestrator` agent definition (`config/agent/orchestrator.md`)
+  so sessions and slim task sessions that reference it drain instead of
+  failing with `Agent not found: "orchestrator"` when slim runs with
+  `setDefaultAgent: false`.
+
+### Changed
+
+- `develop` and `scope` wording: the PR opens at the bump-matrix bump; each
+  later change bumps the patch.
+
 ## [1.3.0] - 2026-10-20
 
 Local code review gate, versioned docs flow, and the MCP and cleanup fixes.

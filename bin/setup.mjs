@@ -305,6 +305,10 @@ const cp = (src, dest) => {
 cp(join(REPO, "config", "opencode.jsonc"), join(TARGET, "opencode.jsonc"));
 cp(join(REPO, "AGENTS.md"), join(TARGET, "AGENTS.md"));
 cp(join(REPO, "config", "commands"), join(TARGET, "commands"));
+// The orchestrator agent is a file, not a slim default: with
+// setDefaultAgent=false slim no longer registers the name, and sessions or
+// task sessions that still reference it fail to drain with `Agent not found`.
+cp(join(REPO, "config", "agent"), join(TARGET, "agent"));
 cp(join(REPO, "config", "plugins", "opencode-review"), join(TARGET, "plugins", "opencode-review"));
 cp(join(REPO, "config", "plugins", "opencode-code-review"), join(TARGET, "plugins", "opencode-code-review"));
 cp(join(REPO, "config", "plugins", "opencode-dcp"), join(TARGET, "plugins", "opencode-dcp"));
@@ -328,11 +332,10 @@ if (!existsSync(envExampleDest)) {
 } else {
   log(`  skip ${envExampleDest} (already exists — not overwriting filled template)`);
 }
-// Create the .env the {env:...} placeholders expand from. Without it
-// DATABASE_URL / REDIS_URL / MDB_MCP_CONNECTION_STRING expand to an empty
-// string and those MCPs die at startup (postgres: `new URL('')`). Copy the
-// template if missing — never overwrite an existing .env, it holds real
-// credentials.
+// Create the .env the mcp-env wrapper reads. Without it DATABASE_URL /
+// REDIS_URL / MDB_MCP_CONNECTION_STRING are missing and those MCPs die at
+// startup (postgres: `new URL('')`). Copy the template if missing — never
+// overwrite an existing .env, it holds real credentials.
 const envDest = join(TARGET, ".env");
 if (!existsSync(envDest)) {
   cp(join(REPO, "config", ".env.example"), envDest);
@@ -452,7 +455,7 @@ if (has("python")) {
       const cfgPath = join(TARGET, "opencode.jsonc");
       // JSONC-aware: JSON.parse throws on this file's comments, and a
       // JSON.stringify round-trip would strip them.
-      replaceMcpCommand(cfgPath, "redis", [exe, "--url", "{env:REDIS_URL}"]);
+      replaceMcpCommand(cfgPath, "redis", [process.execPath, join(TARGET, "tools", "mcp-env.mjs"), exe, "--url", "@REDIS_URL@"]);
       log(`  redis MCP -> ${exe}`);
     } catch (e) {
       log(`  warn: could not repoint redis MCP (${e.message})`);
@@ -524,8 +527,13 @@ const MCP_TOOL_INSTALLS = [
     dir: "postgres-mcp",
     pkg: "@modelcontextprotocol/server-postgres@0.6.2",
     entry: ["node_modules", "@modelcontextprotocol", "server-postgres", "dist", "index.js"],
-    args: ["{env:DATABASE_URL}"],
+    args: ["@DATABASE_URL@"],
     via: "node",
+    // postgres reads the URL from argv, and mongodb reads
+    // MDB_MCP_CONNECTION_STRING from env: both need mcp-env to load
+    // <config>/.env. The host's {env:...} expansion runs before this process
+    // starts and would pass "" instead.
+    wrap: true,
   },
   {
     key: "mongodb",
@@ -534,6 +542,7 @@ const MCP_TOOL_INSTALLS = [
     entry: ["node_modules", "mongodb-mcp-server", "dist", "esm", "index.js"],
     args: ["--readOnly"],
     via: "node",
+    wrap: true,
   },
   {
     key: "kubernetes",
@@ -545,7 +554,7 @@ const MCP_TOOL_INSTALLS = [
       "bin",
       `kubernetes-mcp-server-${K8S_PLATFORM}${process.platform === "win32" ? ".exe" : ""}`,
     ],
-    args: ["--log-file", "stderr"],
+    args: [],
     via: "exe",
   },
 ];
@@ -574,7 +583,10 @@ for (const t of MCP_TOOL_INSTALLS) {
   }
   try {
     const cfgPath = join(TARGET, "opencode.jsonc");
-    const cmd = [...(launcher ? [launcher] : []), entryPath, ...t.args];
+    const mcpEnv = join(TARGET, "tools", "mcp-env.mjs");
+    const cmd = t.wrap
+      ? [launcher, mcpEnv, launcher, entryPath, ...t.args]
+      : [...(launcher ? [launcher] : []), entryPath, ...t.args];
     replaceMcpCommand(cfgPath, t.key, cmd);
     log(`  ${t.key} MCP -> ${cmd.join(" ")}`);
   } catch (e) {
@@ -607,7 +619,7 @@ if (!has("python")) {
     } else {
       try {
         const cfgPath = join(TARGET, "opencode.jsonc");
-        replaceMcpCommand(cfgPath, "google-analytics", [ANALYTICS_EXE]);
+        replaceMcpCommand(cfgPath, "google-analytics", [process.execPath, join(TARGET, "tools", "mcp-env.mjs"), ANALYTICS_EXE]);
         log(`  google-analytics MCP -> ${ANALYTICS_EXE}`);
       } catch (e) {
         log(`  warn: could not repoint google-analytics MCP (${e.message})`);

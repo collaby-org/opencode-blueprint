@@ -257,7 +257,13 @@ function main() {
   const level = args.level || plan.level || "standard";
 
   const all = loadFindings(findingsDir);
-  const expected = Number.isFinite(args.expected) && args.expected > 0 ? args.expected : all.fileCount;
+  // Fail closed: a review is complete only when every spawned reviewer wrote a
+  // findings file. The plan records how many the level expects; a plan from
+  // before that field defaults to two (security + correctness).
+  const planAgents = Number.isFinite(plan.agents) && plan.agents > 0
+    ? plan.agents
+    : plan.level === "quick" ? 1 : 2;
+  const expected = Number.isFinite(args.expected) && args.expected > 0 ? args.expected : planAgents;
   const complete = all.fileCount >= expected;
   const lineSets = parseLineSets(plan);
 

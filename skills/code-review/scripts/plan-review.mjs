@@ -389,6 +389,7 @@ function main() {
     gitDir: gd,
     planDir,
     level: args.level,
+    agents: args.level === "quick" ? 1 : 2,
     budget: { maxContextTokens: maxContext, chunkTokens },
     totals: {
       files: files.length,

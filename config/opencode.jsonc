@@ -175,7 +175,7 @@
     },
     "redis": {
       "type": "local",
-      "command": ["C:\\Program Files\\nodejs\\node.exe", "C:\\Users\\horgh\\.config\\opencode\\tools\\mcp-env.mjs", "C:\\Users\\horgh\\AppData\\Local\\Programs\\Python\\Python314\\Scripts\\redis-mcp-server.exe", "--url", "{env:REDIS_URL}"],
+      "command": ["C:\\Program Files\\nodejs\\node.exe", "C:\\Users\\horgh\\.config\\opencode\\tools\\mcp-env.mjs", "C:\\Users\\horgh\\AppData\\Local\\Programs\\Python\\Python314\\Scripts\\redis-mcp-server.exe", "--url", "@REDIS_URL@"],
       "enabled": true
     },
     "kubernetes": {

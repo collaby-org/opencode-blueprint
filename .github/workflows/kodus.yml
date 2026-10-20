@@ -28,16 +28,20 @@ jobs:
   kodus:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Job-level env because a step `if:` cannot read the `secrets` context;
+    # this is the documented way to skip an unconfigured repository. Every
+    # action below is pinned to a commit, so no mutable tag can read the key,
+    # and no third-party action runs in this job.
     env:
       KODUS_TEAM_KEY: ${{ secrets.KODUS_TEAM_KEY }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@0a44ba7841725637a19e28fa30b79a866c81b0a6 # v4.0.4
         with:
           node-version: 22
 

@@ -40,9 +40,13 @@ try {
   // No .env: fall back to the inherited environment.
 }
 
-// The file wins over an inherited empty value: the host passes "" for a
-// placeholder it could not expand.
-const env = { ...process.env, ...fileEnv };
+// A non-empty inherited value wins: it is the current credential, and a stale
+// `.env` line must not shadow a freshly exported one. An empty inherited value
+// is the host's unexpanded `{env:VAR}` placeholder, so the file fills it.
+const env = { ...fileEnv };
+for (const [key, value] of Object.entries(process.env)) {
+  if (value !== undefined && value !== "") env[key] = value;
+}
 const expand = (arg) =>
   arg
     // `@NAME@` is the form used in opencode.jsonc: OpenCode rewrites

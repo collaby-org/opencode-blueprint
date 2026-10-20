@@ -240,8 +240,10 @@ only. It is mandatory, not a second opinion.
 
 - The `opencode-code-review` plugin registers the command and blocks
   `gh pr create` until a complete review of the current HEAD returns
-  `approve` or `approve-with-nits`. Draft PRs are allowed. The explicit
-  escape is `enforce_pr_gate: false` in `.opencode/review.json`.
+  `approve` or `approve-with-nits`. Three deliberate escapes, nothing else: a
+  draft PR; `enforce_pr_gate: false` in `.opencode/review.json`; and
+  `CODE_REVIEW_SKIP=1 gh pr create ...` for a single command. The verdict
+  reason names the escape that applied.
 - The reviewer never edits code. Findings go to the implementer, then the
   review reruns, at most twice. A third failed round goes to the human.
 - After the PR opens, sync the result with

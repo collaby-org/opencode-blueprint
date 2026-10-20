@@ -13,7 +13,7 @@ the last releases delivered.
   sources `cathrynlavery/diagram-design`, `heygen-com/hyperframes` and
   `mattpocock/skills`, and the skill count corrected from 94 to 119 in the
   `package.json` description. Shipped in 1.2.7.
-- [ ] Release the local code review gate and the versioned docs flow as 1.3.0:
+- [ ] Release the local code review gate and the versioned docs flow as 1.3.1:
   the `code-review` skill, the `opencode-code-review` plugin, the two GitHub
   workflows, the `AGENTS.md` docs/version rules and the skill updates are in
   the working tree. Done when the tag exists, a fresh install loads the plugin
