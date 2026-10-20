@@ -21,6 +21,15 @@ the last releases delivered.
   loads the plugin (`/code-review` present, `gh pr create` gated), the agent
   file lands in `~/.config/opencode/agents/` and the docs rule is enforced on
   the next project.
+- [x] Report the MCP credentials the host is missing (1.4.1) and replace the
+  config atomically (1.4.2), so an install can no longer leave the host with
+  an empty `opencode.jsonc` and no plugins, MCPs or agents.
+- [x] Add the `mindmap` skill and say when a map belongs in a project
+  (1.4.2): a Markmap file in the resolved docs home, the interactive React
+  file only on request.
+- [x] State the worktree and pull request rules (1.4.2): a worktree on the
+  repository's own drive, every change through a new pull request with the
+  branch pushed, merging the human's decision.
 - [ ] Authenticate the hosted MCP servers: `opencode mcp auth cloudflare`,
   `expo`, `figma`, `notion`, `stripe`, `supabase`, and set
   `SENTRY_ACCESS_TOKEN` for sentry. Done when `opencode mcp list` shows every

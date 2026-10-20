@@ -158,6 +158,19 @@ isolate ports or databases — confirm the port answers your process; no schema
 experiments on shared DBs. Memory (`opencode-mem`) captures durable facts;
 costs roll into `opencode-telemetry`. Unresolved conflict: stop and report.
 
+## Parallel work (always)
+
+Use as many agents as the work needs — the limit is the size of the
+partition, not the number of agents. No two *writers* may own the same path:
+partition the change into work units (a service, a package, a feature area, a
+document), give every unit one owner and one worktree, run independent units in
+the same wave and dependent units in the next, and let read-only lanes
+overlap freely. Write the scope manifest and check it before dispatching:
+`node bin/agents-scope.mjs --write .agents/lanes.json` then
+`node bin/agents-scope.mjs --check .agents/lanes.json` — it fails on two
+write lanes claiming one path, on a path outside the repository, or on a write
+lane with no scope.
+
 ## Disk hygiene (always)
 
 Keep the system drive above ~15 GB free; ten sessions may be running at once,

@@ -32,9 +32,10 @@ documentation artifact that belongs with the code it describes.
 **React (on request):** An interactive map as a single self-contained `.jsx` file written next
 to the Markmap file (same `mindmaps/` directory, `<topic>.jsx`). It has pan, zoom, collapse,
 palette switching, a save button, edge-anchored connectors and hover tooltips. The user opens
-it in a browser or drops it into a React project. Generate it when the user asks for an
-interactive map, a clickable map, or "the React version"; the Markmap file is still the
-canonical artifact.
+it in a browser or drops it into a React project; the save button writes to the browser's
+own storage, so the file in the repository stays the copy that matters. Generate it when the
+user asks for an interactive map, a clickable map, or "the React version"; the Markmap file
+is still the canonical artifact.
 
 **Trigger Markmap mode when the user says any of:**
 "markmap", "markdown map", "--md", "portable format", "export as markdown map",
@@ -431,9 +432,8 @@ Edit response: State change (1 sentence) → regenerate → stop.
 ## What NOT To Do
 
 - Do NOT generate connectors using center coordinates — use `edgePoint()` + `buildCurve()`
-- Do NOT omit the 💾 Save button or the ⬇ .md button — use the component skeleton above
-- Do NOT regenerate or edit `references/atlas.html` — publish a shell copy of the file
-- Do NOT write React code in Atlas mode — write the map as data
+- Do NOT omit the ⬇ .md button - use the component skeleton above
+- Do NOT edit `references/atlas.html` - it is reference material for a host that can publish pages. On this host every map is a file in the repository (`docs/mindmaps/`)
 - Do NOT use `opacity`, `rgba()`, or alpha channels to lighten pill colors — use solid hex only, force `fillOpacity={1}`
 - Do NOT respond with a plain text summary — always write either a React .jsx file or a Markmap .md file
 - Do NOT use Mermaid.js or Excalidraw

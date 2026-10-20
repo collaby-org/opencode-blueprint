@@ -9,6 +9,27 @@ Version 1.0.0 was published to npm but never got a git tag, so it has no tag
 range. The npm publish timestamps are UTC and can sit a day earlier than the
 commit date of the same version.
 
+## [1.4.3] - 2026-10-20
+
+### Fixed
+
+- The installer stages a copy next to the destination and swaps it in, keeping
+  the old one until the new one is in place: a tree whose copy fails now leaves
+  the destination alone instead of deleting it, the staging directory is
+  removed when the copy fails, and the copy says so when the staged file is
+  short or the source is empty.
+- The hygiene report looks for worktrees on the repository's own drive, not only
+  on one fixed letter.
+- The `mindmap` skill no longer tells an agent to publish a page, store a map
+  in the Knowledge Atlas or write "for Claude" in a footer: the map is a file in
+  the repository, and the atlas is documented as reference material for a host
+  that can publish pages.
+
+### Changed
+
+- Each changelog entry sits under the version that shipped it, and the roadmap
+  records what the last two versions delivered.
+
 ## [1.4.2] - 2026-10-20
 
 ### Added
@@ -24,13 +45,15 @@ commit date of the same version.
 
 ### Fixed
 
-- The installer replaces a file atomically: it writes a temporary file next to
-  the destination and renames it over it. The remove-then-copy left a window
-  in which the host could read an empty `opencode.jsonc` — and an empty config
-  takes every plugin, MCP and agent with it, which is what left the host
-  without `oh-my-opencode-slim` and without the MCPs. The copy now also says so
-  when the destination ends up empty, cleans up its temporary file when the
-  copy fails, and never replaces a link the user put in place.
+- The installer replaces a file atomically: it stages the copy next to the
+  destination and swaps it in, keeping the old one until the new one is in
+  place. The remove-then-copy left a window in which the host could read an
+  empty `opencode.jsonc` — and an empty config takes every plugin, MCP and
+  agent with it, which is what left the host without `oh-my-opencode-slim` and
+  without the MCPs. The copy now also says so when the destination ends up
+  empty or short, cleans up its staging directory when the copy fails, never
+  replaces a link the user put in place, and leaves a tree in place when its
+  copy fails.
 
 ### Changed
 
@@ -51,29 +74,12 @@ commit date of the same version.
 
 - The installer reports the MCP credentials that are missing from the process
   environment (`GITHUB_TOKEN`, `SENTRY_ACCESS_TOKEN`) and says that a value set
-  after the host started is not visible until it restarts.
+  after the host started is not visible until it restarts, and that the `.env`
+  file feeds the wrapped local servers, not a header credential on a remote
+  server.
 - The installer reports that `opencode-mem` holds a single-writer database: run
   one OpenCode server at a time, or the second one cannot open it and the
   plugin reports itself as failed.
-
-### Fixed
-
-- The installer replaces a file atomically: it writes a temporary file next to
-  the destination and renames it over it. The remove-then-copy left a window
-  in which the host could read an empty `opencode.jsonc` — and an empty config
-  takes every plugin, MCP and agent with it, which is what left the host
-  without `oh-my-opencode-slim` and without the MCPs. The copy now also says so
-  when the destination ends up empty.
-
-### Changed
-
-- `AGENTS.md`: a worktree lives on the same drive as its repository
-  (`D:\Work\worktrees\<repo>\<branch>` for a repository on `D:`), never on the
-  system drive unless the repository itself is there, and never inside the
-  repository's own location.
-- `AGENTS.md`: every change lands through a new pull request. The branch is
-  pushed — a pull request that only exists on this machine is not done — and
-  merging stays the human's decision.
 
 ## [1.4.0] - 2026-10-20
 

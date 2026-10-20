@@ -1,8 +1,10 @@
 # Persistent Storage & Atlas
 
-> **Scope:** this file covers the claude.ai chat fallback, where maps are React artifacts
-> saved with `window.storage`. When the session has the `Artifact` and `ArtifactData` tools,
-> use the published Knowledge Atlas described in SKILL.md instead (`references/atlas.html`).
+> **Scope:** reference material only. The published Knowledge Atlas needs the
+> `Artifact` and `ArtifactData` tools, which this host does not have, so a map
+> here is a file in the repository. What follows describes the browser-storage
+> fallback the interactive build uses, and the atlas for a host that can
+> publish pages.
 
 Mind maps can persist across sessions using the `window.storage` API. This enables
 a personal knowledge atlas — a collection of linked maps that grows over time.

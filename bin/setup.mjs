@@ -4,7 +4,7 @@
 //   npx opencode-blueprint            # full install
 //   npx opencode-blueprint --dry-run  # print what would happen
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, copyFileSync, cpSync, rmSync, readFileSync, writeFileSync, readdirSync, lstatSync, renameSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, copyFileSync, cpSync, rmSync, readFileSync, writeFileSync, readdirSync, lstatSync, renameSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, dirname, delimiter } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -426,25 +426,70 @@ const sameContent = (a, b) => {
   }
 };
 
-// Write a file atomically: a temporary file next to the destination, then a
-// rename over it. A truncate-then-write leaves a window in which the host
-// reads a half written file — and an empty opencode.jsonc takes every plugin,
-// MCP and agent with it.
-const writeAtomic = (from, to) => {
-  const tmp = `${to}.new-${process.pid}`;
+// A unique staging directory next to the destination: the name is not
+// predictable, and nothing else can be sitting in it.
+const stageDir = (dest) => {
+  const parent = dirname(dest);
+  mkdirSync(parent, { recursive: true });
+  return mkdtempSync(join(parent, ".opencode-install-"));
+};
+// Put a staged path in place of the destination. The old one is kept until the
+// new one is in place, and put back when the swap fails.
+const swapIn = (staged, dest) => {
+  const backup = `${dest}.old-${process.pid}`;
+  let moved = false;
+  if (existsAny(dest)) {
+    renameSync(dest, backup);
+    moved = true;
+  }
   try {
-    copyFileSync(from, tmp);
-    renameSync(tmp, to);
-    return true;
+    renameSync(staged, dest);
   } catch (error) {
-    // The temporary file must not survive a failed copy: it is a full copy of
-    // the shipped file sitting in the directory the host watches.
-    try {
-      rmSync(tmp, { force: true });
-    } catch {
-      // Nothing to clean.
+    if (moved) {
+      try {
+        renameSync(backup, dest);
+      } catch {
+        // The old destination is gone; the staged copy is still on disk.
+      }
     }
     throw error;
+  }
+  if (moved) rmSync(backup, { recursive: true, force: true });
+};
+// Write a file atomically: stage it, then swap it in. A truncate-then-write
+// leaves a window in which the host reads a half written file — and an empty
+// opencode.jsonc takes every plugin, MCP and agent with it.
+const writeAtomic = (from, to) => {
+  const stage = stageDir(to);
+  const tmp = join(stage, "file");
+  try {
+    copyFileSync(from, tmp);
+    // The copy must hold the whole source, and the source must not be empty.
+    const srcSize = statSync(from).size;
+    const tmpSize = statSync(tmp).size;
+    if (srcSize !== tmpSize) {
+      log(`  warn: ${to} was staged with ${tmpSize} of ${srcSize} bytes`);
+    }
+    if (srcSize === 0) {
+      log(`  warn: ${from} is empty — ${to} would leave the host without it`);
+    }
+    swapIn(tmp, to);
+    return true;
+  } finally {
+    rmSync(stage, { recursive: true, force: true });
+  }
+};
+// Copy a tree atomically: stage the whole tree, then swap it in. A failed
+// copy leaves the destination in place.
+const copyTreeAtomic = (from, to) => {
+  const stage = stageDir(to);
+  const staged = join(stage, "tree");
+  try {
+    cpSync(from, staged, { recursive: true });
+    swapIn(staged, to);
+    return true;
+  } finally {
+    rmSync(stage, { recursive: true, force: true });
   }
 };
 // Copy a file, and never let one bad destination abort the install.
@@ -523,20 +568,11 @@ const cp = (src, dest) => {
       // A file is replaced atomically: the destination never exists in a
       // half written state.
       writeAtomic(src, dest);
-      // The destination must hold the shipped content. An empty file where
-      // the source has bytes means the copy was truncated; say so loudly
-      // instead of leaving the host without its config.
-      try {
-        if (statSync(dest).size === 0 && statSync(src).size > 0) {
-          log(`  warn: ${dest} is empty after the copy — the host will start without it`);
-        }
-      } catch {
-        // Nothing to compare.
-      }
       return true;
     }
-    rmSafe(dest);
-    cpSync(src, dest, { recursive: true });
+    // A tree is staged first and swapped in afterwards: a failed copy leaves
+    // the destination in place instead of deleting it.
+    copyTreeAtomic(src, dest);
     return true;
   } catch {
     log(`  keep ${dest} (cannot be written)`);
@@ -545,9 +581,6 @@ const cp = (src, dest) => {
 };
 cp(join(REPO, "config", "opencode.jsonc"), join(TARGET, "opencode.jsonc"));
 cp(join(REPO, "AGENTS.md"), join(TARGET, "AGENTS.md"));
-// The MCP servers that need a credential fail at connect time when the value
-// is not in the process environment, and the host expands {env:NAME} from
-// its own environment when it starts. A value set after the host started is
 // The MCP servers that need a credential fail at connect time when the value
 // is not in the process environment, and the host expands {env:NAME} from
 // its own environment when it starts. A value set after the host started is

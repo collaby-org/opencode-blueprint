@@ -392,7 +392,7 @@ export default function MindMap() {
 
       {/* ── HINT ── */}
       <div style={{ position: "absolute", bottom: 10, left: "50%", transform: "translateX(-50%)", zIndex: 10, fontSize: 11, color: "#999", background: "rgba(255,255,255,0.88)", padding: "4px 14px", borderRadius: 20, whiteSpace: "nowrap", fontFamily: FONT }}>
-        Scroll to zoom · Drag to pan · Click branches to collapse · 💾 to save to atlas
+        Scroll to zoom · Drag to pan · Click branches to collapse · 💾 to save to this browser
       </div>
     </div>
   );

@@ -28,6 +28,39 @@ don't stall on decisions you can make and revisit.
   mechanical changes, parallel per-area lanes. Don't: discovery/decisions, one
   small (<20-line) change, anything needing design judgment.
 
+## Parallel work
+
+Use as many lanes as the work needs — the limit is the size of the partition,
+not the number of agents. What makes parallel work safe is that no two
+*writers* ever own the same path.
+
+- **Partition before dispatch.** Cut the change into work units. A unit is a
+  set of paths one lane owns end to end: a service, a package, a feature area,
+  a document. Name the unit, its owner and its paths.
+- **One owner per path.** Two write lanes that share a path are a conflict,
+  not a collaboration. Split the unit, or run the lanes in sequence. Read-only
+  lanes (@explorer, a reviewer, a test run) may overlap freely: they never
+  write.
+- **One lane, one worktree.** Every write lane works in its own worktree and
+  branch. The integration point is the pull request, never a shared working
+  tree.
+- **Waves for dependencies.** Independent units run in the same wave; a unit
+  that depends on another runs in the next one. State the wave and the
+  dependency in the dispatch.
+- **Prove it, do not assume it.** Write the scope manifest and check it
+  before dispatching:
+
+  ```
+  node bin/agents-scope.mjs --write .agents/lanes.json    # template
+  node bin/agents-scope.mjs --check .agents/lanes.json     # exit 1 on a conflict
+  ```
+
+  The check fails when two write lanes claim the same path, when a path
+  escapes the repository, or when a write lane has no scope. Fix the manifest
+  before spawning anything.
+- **Keep the ledger.** Lanes, owners, paths, status. Reconcile the writers,
+  then run the full suite once yourself.
+
 ## Workflow
 
 - Build in passes: a working outline first, then structure, then detail.
