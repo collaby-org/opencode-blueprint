@@ -9,6 +9,40 @@ Version 1.0.0 was published to npm but never got a git tag, so it has no tag
 range. The npm publish timestamps are UTC and can sit a day earlier than the
 commit date of the same version.
 
+## [1.3.5] - 2026-10-20
+
+### Fixed
+
+- The gate reads the session directory from `session.location.directory` or
+  `session.directory`, and extracts the session id from every shape the hook
+  event can carry, so a worktree or a second project is checked against its
+  own artifact instead of the plugin's load directory.
+- `reviewCoversHead` no longer defaults to the server working directory: the
+  root is required, so the gate can never consult the wrong checkout.
+- The status tool no longer reports `via: "head"` when both heads are null.
+- On Windows, a UNC or over-long checkout path is retried with the extended
+  path prefix instead of being reported as "not a git repository".
+
+## [1.3.4] - 2026-10-20
+
+### Fixed
+
+- The gate reads `ctx.location.directory` — the V2 setup context has no
+  `ctx.directory` — and resolves the session's location per invocation, so a
+  worktree checks its own `.git/code-review/last-result.json` instead of the
+  project's. When no location can be resolved it fails closed with a named
+  error instead of falling back to the server working directory.
+
+## [1.3.3] - 2026-10-20
+
+### Fixed
+
+- The gate resolves the project root from the plugin context instead of
+  `process.cwd()`, which points at the opencode config home when the server
+  starts outside the checkout. `gh pr create` now finds
+  `.git/code-review/last-result.json` and the per-repo `.opencode/review.json`;
+  before this, the gate reported "no review artifact" even after a clean run.
+
 ## [1.3.2] - 2026-10-20
 
 ### Fixed
@@ -24,7 +58,7 @@ commit date of the same version.
 
 ## [1.3.1] - 2026-10-20
 
-Review fixes for 1.3.0. The branch lands as 1.3.2.
+Review fixes for 1.3.0. The branch lands as 1.3.5.
 
 ### Fixed
 
