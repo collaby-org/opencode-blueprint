@@ -42,11 +42,36 @@ const arg = (name) => {
   return i === -1 ? null : args[i + 1];
 };
 const flag = (name) => args.includes(name);
+// Every value that follows a `--changed`, in every occurrence of it. A single
+// value would silently drop the rest and turn a scope violation into a clean
+// result.
+const allArgs = (name) => {
+  const values = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === name && i + 1 < args.length) values.push(args[i + 1]);
+  }
+  return values;
+};
+// A bare word that is not a flag or a value belongs to a flag: a mistyped
+// invocation must never look like a clean check.
+const strayArgs = (known) => {
+  const stray = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a.startsWith("--")) {
+      if (known.includes(a) && i + 1 < args.length) i++;
+      continue;
+    }
+    stray.push(a);
+  }
+  return stray;
+};
 
 const write = arg("--write");
 const check = arg("--check");
 const verify = arg("--verify");
 const changed = arg("--changed");
+void changed;
 
 if (!write && !check && !verify) {
   console.log(`Usage:
@@ -100,7 +125,15 @@ try {
   process.exit(1);
 }
 
-const lanes = Array.isArray(manifest.lanes) ? manifest.lanes : [];
+const lanes = Array.isArray(manifest.lanes) ? manifest.lanes : null;
+if (lanes === null) {
+  console.log(`  ${manifestPath} has no "lanes" array`);
+  process.exit(1);
+}
+if (lanes.length === 0) {
+  console.log(`  ${manifestPath} has no lanes: there is nothing to check`);
+  process.exit(1);
+}
 const problems = [];
 const warnings = [];
 const writers = [];
@@ -190,9 +223,18 @@ while (placed.size < ids.size) {
 }
 
 if (verify) {
-  const files = (changed || "").split(",").map((f) => f.trim()).filter(Boolean);
+  const files = allArgs("--changed")
+    .flatMap((v) => v.split(","))
+    .map((f) => f.trim())
+    .filter(Boolean);
   if (files.length === 0) {
-    console.log("  no changed files given — pass --changed <file>,<file>");
+    console.log("  no changed files given - pass --changed <file>,<file>");
+    process.exit(2);
+  }
+  const stray = strayArgs(["--verify", "--changed"]);
+  if (stray.length > 0) {
+    console.log(`  unexpected argument(s): ${stray.join(" ")}`);
+    console.log("  Every changed file must be listed: --changed <file>,<file>");
     process.exit(2);
   }
   for (const f of files) {

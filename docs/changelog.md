@@ -41,15 +41,17 @@ commit date of the same version.
 
 ### Fixed
 
-- The installer writes every file it owns atomically: it stages the copy next
-  to the destination and swaps it in, keeping the old one until the new one is
-  in place. The remove-then-copy, and the plain rewrite the MCP repoint used,
-  left a window in which the host could read an empty `opencode.jsonc` — and an
-  empty config takes every plugin, MCP and agent with it, which is what left
-  the host without `oh-my-opencode-slim` and with two MCPs. A tree whose copy
-  fails now leaves the destination alone, the staging directory is removed when
-  the copy fails, a link the user put in place is never replaced, and the copy
-  says so when the staged file is short or the source is empty.
+- The installer writes every file it owns atomically: it stages the copy
+  outside the directories the host scans and renames it over the destination in
+  one step, so a reader sees either the old file or the new one, never a missing
+  or half-written one. The remove-then-copy, and the plain rewrite the MCP
+  repoint used, left a window in which the host could read an empty
+  `opencode.jsonc` — and an empty config takes every plugin, MCP and agent
+  with it, which is what left the host without `oh-my-opencode-slim` and with
+  two MCPs. A tree whose copy fails now leaves the destination alone, the
+  staging directory is removed when the copy fails, a link or a file the user
+  put in place is never replaced, and the copy says so when the staged file is
+  short or the source is empty.
 - The hygiene report looks for worktrees on the repository's own drive, not only
   on one fixed letter.
 - The `mindmap` skill no longer tells an agent to publish a page, store a map

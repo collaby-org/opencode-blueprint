@@ -207,7 +207,9 @@ const replaceMcpCommand = (cfgPath, key, nextArgs) => {
   if (!Array.isArray(cmd) || JSON.stringify(cmd) !== JSON.stringify(nextArgs)) {
     throw new Error(`refusing to write ${cfgPath}: "${key}.command" would be ${JSON.stringify(cmd)}, expected ${JSON.stringify(nextArgs)}`);
   }
-  writeTextAtomic(cfgPath, next);
+  if (!writeTextAtomic(cfgPath, next)) {
+    throw new Error(`kept ${cfgPath} (not a regular file; the MCP entry was not repointed)`);
+  }
   return cmd;
 };
 
@@ -426,40 +428,106 @@ const sameContent = (a, b) => {
   }
 };
 
-// A unique staging directory next to the destination: the name is not
-// predictable, and nothing else can be sitting in it.
+// A staging directory the host does not scan: the config home's plugins
+// directory is auto-loaded, so a staging directory left there would be read as
+// a plugin. The name is unpredictable and stale entries are swept.
+const STAGING_ROOT = join(TARGET, ".install-staging");
 const stageDir = (dest) => {
-  const parent = dirname(dest);
-  mkdirSync(parent, { recursive: true });
-  return mkdtempSync(join(parent, ".opencode-install-"));
+  mkdirSync(STAGING_ROOT, { recursive: true });
+  // Sweep what an earlier run left behind.
+  try {
+    for (const entry of readdirSync(STAGING_ROOT, { withFileTypes: true })) {
+      if (entry.isDirectory() && entry.name.startsWith("stage-")) {
+        rmSync(join(STAGING_ROOT, entry.name), { recursive: true, force: true });
+      }
+    }
+  } catch {
+    // Nothing to sweep.
+  }
+  return mkdtempSync(join(STAGING_ROOT, "stage-"));
 };
-// Put a staged path in place of the destination. The old one is kept until the
-// new one is in place, and put back when the swap fails.
+// Put a staged path in place of the destination with one rename. Renaming over
+// an existing file is atomic on POSIX and on Windows (MoveFileExW with
+// REPLACE_EXISTING), so a reader sees either the old file or the new one and
+// never an absent or half-written one. The two-step swap is the fallback for
+// the case where the direct rename is refused.
 const swapIn = (staged, dest) => {
   const backup = `${dest}.old-${process.pid}`;
-  let moved = false;
+  let copied = false;
   if (existsAny(dest)) {
-    renameSync(dest, backup);
-    moved = true;
+    // The recovery copy is for the error path only: the direct rename replaces
+    // the destination, and a failed rename leaves this copy to fall back on.
+    try {
+      copyFileSync(dest, backup);
+      copied = true;
+    } catch {
+      // No recovery copy; the fallback below still has the staged file.
+    }
   }
   try {
     renameSync(staged, dest);
   } catch (error) {
-    if (moved) {
+    // The direct rename was refused: fall back to the two-step swap.
+    if (existsAny(dest)) {
       try {
-        renameSync(backup, dest);
+        renameSync(dest, `${dest}.moved-${process.pid}`);
       } catch {
-        // The old destination is gone; the staged copy is still on disk.
+        // Give up on the fallback.
       }
     }
-    throw error;
+    try {
+      renameSync(staged, dest);
+    } catch {
+      if (copied) {
+        try {
+          renameSync(backup, dest);
+        } catch {
+          // The destination is gone; the staged file is still on disk.
+        }
+      }
+      throw error;
+    }
   }
-  if (moved) rmSync(backup, { recursive: true, force: true });
+  if (copied) rmSync(backup, { recursive: true, force: true });
+};
+// A destination the user put in place is not ours to replace: a link would be
+// destroyed, and a directory where a file belongs would be deleted. The copy
+// keeps it and says so.
+const guardFileDest = (dest) => {
+  if (!existsAny(dest)) return true;
+  try {
+    const stat = lstatSync(dest);
+    if (stat.isSymbolicLink()) {
+      log(`  keep ${dest} (a link; not ours to write through)`);
+      return false;
+    }
+    if (!stat.isFile()) {
+      log(`  keep ${dest} (not a regular file; not ours to replace)`);
+      return false;
+    }
+  } catch {
+    // Fall through to the copy.
+  }
+  return true;
+};
+// The same for a tree: a link is kept, a directory is the normal case.
+const guardTreeDest = (dest) => {
+  if (!existsAny(dest)) return true;
+  try {
+    if (lstatSync(dest).isSymbolicLink()) {
+      log(`  keep ${dest} (a link; not ours to write through)`);
+      return false;
+    }
+  } catch {
+    // Fall through to the copy.
+  }
+  return true;
 };
 // Write a file atomically: stage it, then swap it in. A truncate-then-write
 // leaves a window in which the host reads a half written file — and an empty
 // opencode.jsonc takes every plugin, MCP and agent with it.
 const writeAtomic = (from, to) => {
+  if (!guardFileDest(to)) return false;
   const stage = stageDir(to);
   const tmp = join(stage, "file");
   try {
@@ -482,12 +550,19 @@ const writeAtomic = (from, to) => {
 // Copy a tree atomically: stage the whole tree, then swap it in. A failed
 // copy leaves the destination in place.
 const copyTreeAtomic = (from, to) => {
+  if (!guardTreeDest(to)) return false;
   const stage = stageDir(to);
   const staged = join(stage, "tree");
   try {
+    // Probe the source first: a permission error becomes a catchable
+    // exception here instead of aborting the process inside the copy.
+    readdirSync(from);
     cpSync(from, staged, { recursive: true });
     swapIn(staged, to);
     return true;
+  } catch (error) {
+    log(`  keep ${to} (cannot be written: ${error && error.code ? error.code : "error"})`);
+    return false;
   } finally {
     rmSync(stage, { recursive: true, force: true });
   }
@@ -498,6 +573,7 @@ const copyTreeAtomic = (from, to) => {
 // with it. This is the path the MCP repoint takes, so it matters as much as
 // the copy.
 const writeTextAtomic = (to, text) => {
+  if (!guardFileDest(to)) return false;
   const stage = stageDir(to);
   const tmp = join(stage, "file");
   try {
@@ -808,6 +884,7 @@ if (!pluginsDirReady) {
 // back to a stale central copy and fail with "Cannot find package".
 const centralPkgPath = join(TARGET, "package.json");
 let centralPkg = {};
+let centralPkgWritable = true;
 const centralPkgText = readTextSafe(centralPkgPath);
 if (centralPkgText !== null) {
   try {
@@ -817,20 +894,25 @@ if (centralPkgText !== null) {
     centralPkg = {};
   }
 } else if (existsAny(centralPkgPath)) {
+  // The file is a link or a directory: it is not ours to replace, and the
+  // dependencies are not merged into something we do not own.
   log(`  keep ${centralPkgPath} (not a regular file; the dependencies are not merged)`);
+  centralPkgWritable = false;
 }
-centralPkg.dependencies = {
-  ...(centralPkg.dependencies || {}),
-  "@opencode-ai/plugin": "^1.19.1",
-  "opencode-mem": "2.32.0",
-};
-if (!DRY) {
-  try {
-    writeTextAtomic(centralPkgPath, JSON.stringify(centralPkg, null, 2) + "\n");
-  } catch {
-    log(`  keep ${centralPkgPath} (cannot be written)`);
-  }
-} else log(`  write ${centralPkgPath} (merge @opencode-ai/plugin into dependencies)`);
+if (centralPkgWritable) {
+  centralPkg.dependencies = {
+    ...(centralPkg.dependencies || {}),
+    "@opencode-ai/plugin": "^1.19.1",
+    "opencode-mem": "2.32.0",
+  };
+  if (!DRY) {
+    try {
+      writeTextAtomic(centralPkgPath, JSON.stringify(centralPkg, null, 2) + "\n");
+    } catch {
+      log(`  keep ${centralPkgPath} (cannot be written)`);
+    }
+  } else log(`  write ${centralPkgPath} (merge @opencode-ai/plugin into dependencies)`);
+}
 run("npm", ["install", "--prefix", TARGET, "--no-audit", "--no-fund"]);
 
 log("== 4/6 skills (global, agent=opencode) ==");

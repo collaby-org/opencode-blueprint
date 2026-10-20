@@ -3,11 +3,14 @@
 > **Scope:** reference material only — do not follow this workflow on this host. The
 > published Knowledge Atlas needs the `Artifact` and `ArtifactData` tools, which
 > opencode does not have, so a map here is a file in the repository. What
-> follows describes the browser-storage fallback the interactive build uses, and
-> the atlas for a host that can publish pages.
+> follows describes the browser-storage fallback the interactive build uses
+> (`window.localStorage`, as in the save button in `SKILL.md`), and the atlas
+> for a host that can publish pages. The code blocks under "Atlas Viewer" are
+> for that other host and do not run here.
 
-Mind maps can persist across sessions using the `window.storage` API. This enables
-a personal knowledge atlas — a collection of linked maps that grows over time.
+Mind maps can persist across sessions using the browser's own `localStorage`
+API. This enables
+a personal knowledge atlas - a collection of linked maps that grows over time.
 
 ## Storage Schema
 
@@ -17,7 +20,7 @@ full data structure plus metadata.
 ```javascript
 // Save a map
 const mapKey = `maps:${slugify(mindmapData.central)}`;
-await window.storage.set(mapKey, JSON.stringify({
+window.localStorage.setItem(mapKey, JSON.stringify({
   data: mindmapData,           // the full mindmapData object
   palette: currentPaletteName, // which palette was active
   layout: currentLayout,       // which layout mode
@@ -27,15 +30,15 @@ await window.storage.set(mapKey, JSON.stringify({
 }));
 
 // Load a map
-const result = await window.storage.get(mapKey);
+const result = window.localStorage.getItem(mapKey);
 const saved = JSON.parse(result.value);
 
 // List all maps
-const keys = await window.storage.list('maps:');
+const keys = Object.keys(window.localStorage).filter(function(k) { return k.indexOf('maps:') === 0; });
 // keys.keys → ["maps:deep-work", "maps:macro-case-for-crypto", ...]
 
 // Delete a map
-await window.storage.delete(mapKey);
+window.localStorage.removeItem(mapKey);
 ```
 
 ## Save Button UI
@@ -57,7 +60,7 @@ async function saveMap(mindmapData, paletteName, layout) {
   const key = `maps:${slug}`;
 
   let existing = null;
-  try { existing = await window.storage.get(key); } catch(e) {}
+  try { existing = window.localStorage.getItem(key); } catch(e) {}
 
   const record = {
     data: mindmapData,
@@ -68,7 +71,7 @@ async function saveMap(mindmapData, paletteName, layout) {
     tags: existing ? JSON.parse(existing.value).tags : [],
   };
 
-  await window.storage.set(key, JSON.stringify(record));
+  window.localStorage.setItem(key, JSON.stringify(record));
   return existing ? 'updated' : 'saved';
 }
 ```
@@ -261,8 +264,8 @@ mind map"), generate the mind map artifact using the saved data:
 ```javascript
 async function loadMap(slug) {
   try {
-    const result = await window.storage.get(`maps:${slug}`);
-    const saved = JSON.parse(result.value);
+    const result = window.localStorage.getItem(`maps:${slug}`);
+    const saved = JSON.parse(result);
     return saved; // { data, palette, layout, createdAt, updatedAt, tags }
   } catch(e) {
     return null; // map not found

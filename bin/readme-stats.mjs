@@ -91,18 +91,23 @@ const strip = [
 ].join("\n");
 
 const raw = readFileSync(README, "utf8");
-const start = raw.indexOf(START);
-const end = raw.indexOf(END);
+// A Windows checkout has CRLF, a Linux one LF. The check compares the
+// normalised text, and the writer keeps the line endings the file already has.
+const eol = raw.includes("\r\n") ? "\r\n" : "\n";
+const normalized = raw.replace(/\r\n/g, "\n");
+const start = normalized.indexOf(START);
+const end = normalized.indexOf(END);
 if (start === -1 || end === -1) {
   console.log(`  the README has no ${START} / ${END} markers`);
   process.exit(1);
 }
-const before = raw.slice(0, start);
-const after = raw.slice(end + END.length);
-const next = `${before}${strip}${after}`;
+const before = normalized.slice(0, start);
+const after = normalized.slice(end + END.length);
+const nextNormalized = `${before}${strip}${after}`;
+const next = nextNormalized.replace(/\n/g, eol);
 
 if (process.argv.includes("--check")) {
-  if (next !== raw) {
+  if (nextNormalized !== normalized) {
     console.log("  the README stats are stale — run: node bin/readme-stats.mjs");
     process.exit(1);
   }
