@@ -315,9 +315,21 @@ const isRegular = (p) => {
 // Copy a tree over another one, file by file, without deleting what is
 // already there.
 const mergeDir = (src, dest) => {
-  // A destination that exists as a file cannot hold the shipped directory:
-  // creating it would throw and abort the install half way.
-  if (existsSync(dest) && isRegular(dest)) {
+  // A destination that is a link is not ours to write through: the copy would
+  // land outside the config home. A destination that exists as a regular file
+  // cannot hold the shipped directory either: creating it would throw and
+  // abort the install half way.
+  let destStat = null;
+  try {
+    destStat = lstatSync(dest);
+  } catch {
+    destStat = null;
+  }
+  if (destStat && destStat.isSymbolicLink()) {
+    log(`  keep ${dest} (a link; not ours to write through)`);
+    return;
+  }
+  if (destStat && isRegular(dest)) {
     log(`  keep ${dest} (you have a file where the shipped tree needs a directory)`);
     return;
   }

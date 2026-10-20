@@ -8,11 +8,14 @@
 ;     Exec inherits the install environment, so a sandboxed OPENCODE_CONFIG_HOME
 ;     stays sandboxed end-to-end (config home resolution + env pass-through
 ;     untouched).
-;   - opencode.jsonc / AGENTS.md are backed up before overwrite (setup.mjs 2/6).
-;   - commands/ is deployed with a backup: the shipped commands are written over
-;     the existing ones, and a command the user changed is copied next to it
-;     before it is replaced. plugins/ deploys verbatim (overwrite is correct:
-;     versioned content, unlike .env.example).
+;   - opencode.jsonc / AGENTS.md are deployed only when missing
+;     (onlyifdoesntexist), so the user's copy is still there for setup.mjs to
+;     back up before it replaces it (setup.mjs 2/6).
+;   - commands/ is deployed only when missing as well (onlyifdoesntexist): a
+;     command the user changed is never overwritten here. setup.mjs owns the
+;     rest, and it keeps a changed command with a backup.
+;     plugins/ deploys verbatim (overwrite is correct: versioned content,
+;     unlike .env.example).
 ;   - config/.env.example is a starter template ONLY (onlyifdoesntexist), so an
 ;     existing file with filled-in keys/values is never overwritten.
 ;   - The remaining steps (prereqs, plugin npm deps, skills, CLIs, manual steps
@@ -58,12 +61,12 @@ Source: "finish-note.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Live deployment to the opencode config home. uninsneveruninstall: uninstalling
 ; the installer must never delete the user's live opencode config.
-Source: "..\AGENTS.md"; DestDir: "{code:GetConfigHome}"; Flags: ignoreversion uninsneveruninstall
-Source: "..\config\opencode.jsonc"; DestDir: "{code:GetConfigHome}"; Flags: ignoreversion uninsneveruninstall
-; The shipped commands are written over the existing ones, and a command the
-; user changed is backed up next to it (backupifexists) before it is replaced.
-; A command the installer did not ship is never removed.
-Source: "..\config\commands\*"; DestDir: "{code:GetConfigHome}\commands"; Flags: ignoreversion recursesubdirs createallsubdirs uninsneveruninstall backupifexists
+; The shipped files are deployed only when they are missing, so the user's own
+; copy is still there for the post-install step to back up before it replaces
+; it. A command the installer did not ship is never removed.
+Source: "..\AGENTS.md"; DestDir: "{code:GetConfigHome}"; Flags: ignoreversion uninsneveruninstall onlyifdoesntexist
+Source: "..\config\opencode.jsonc"; DestDir: "{code:GetConfigHome}"; Flags: ignoreversion uninsneveruninstall onlyifdoesntexist
+Source: "..\config\commands\*"; DestDir: "{code:GetConfigHome}\commands"; Flags: ignoreversion recursesubdirs createallsubdirs uninsneveruninstall onlyifdoesntexist
 Source: "..\config\plugins\*"; DestDir: "{code:GetConfigHome}\plugins"; Flags: ignoreversion recursesubdirs createallsubdirs uninsneveruninstall; Excludes: "node_modules\*"
 ; Starter template only — never overwrite an existing (possibly filled-in) file.
 Source: "..\config\.env.example"; DestDir: "{code:GetConfigHome}"; Flags: ignoreversion uninsneveruninstall onlyifdoesntexist
