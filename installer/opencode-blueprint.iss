@@ -9,8 +9,10 @@
 ;     stays sandboxed end-to-end (config home resolution + env pass-through
 ;     untouched).
 ;   - opencode.jsonc / AGENTS.md are backed up before overwrite (setup.mjs 2/6).
-;   - commands/ and plugins/ deploy verbatim (overwrite is correct: versioned
-;     content, unlike .env.example).
+;   - commands/ is merged: the shipped commands are written, a command the
+;     user changed is kept with a backup, and a command the installer did not
+;     put there is not removed. plugins/ deploys verbatim (overwrite is
+;     correct: versioned content, unlike .env.example).
 ;   - config/.env.example is a starter template ONLY (onlyifdoesntexist), so an
 ;     existing file with filled-in keys/values is never overwritten.
 ;   - The remaining steps (prereqs, plugin npm deps, skills, CLIs, manual steps

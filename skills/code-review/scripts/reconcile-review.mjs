@@ -186,7 +186,7 @@ function renderFinding(f) {
   return lines.join("\n").trimEnd();
 }
 
-function renderReport({ plan, findings, dropped, verdict, author, reviewer, threshold, level, passedPasses, complete, expected, reported }) {
+function renderReport({ plan, findings, dropped, verdict, author, reviewer, threshold, level, passedPasses, complete, expected, reported, chunksExceedBudget }) {
   const counts = {
     blocker: findings.filter((f) => f.severity === "blocker").length,
     major: findings.filter((f) => f.severity === "major").length,
@@ -215,9 +215,13 @@ function renderReport({ plan, findings, dropped, verdict, author, reviewer, thre
   ];
 
   if (!complete) {
+    // Two different reasons, two different sentences: an agent that did not
+    // report, and a plan whose tail chunk never had one.
     out.push(
       "> [!WARNING]",
-      `> Incomplete review: ${reported} of ${expected} reviewer agents reported. The missing chunk is unreviewed, so this result is not a clean pass.`,
+      chunksExceedBudget
+        ? "> Incomplete review: the plan has more chunks than the agent budget, so the tail chunk never had a reviewer. Rerun the planner with a larger `--chunk-tokens`; this result is not a clean pass."
+        : `> Incomplete review: ${reported} of ${expected} reviewer agents reported. The missing chunk is unreviewed, so this result is not a clean pass.`,
       "",
     );
   }

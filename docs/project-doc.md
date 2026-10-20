@@ -126,8 +126,11 @@ The constraints that must hold at runtime:
 - A rewrite is validated before it is written: the file must still parse and
   the entry must carry exactly the array that was intended. A failed rewrite
   leaves the file as it was and prints a warning.
-- Files that can hold user values are copied only when missing. Files that
-  are versioned content are overwritten.
+- Files that can hold user values are copied only when missing. `opencode.jsonc`,
+  `AGENTS.md` and `plugins/` are versioned content and are overwritten.
+  `commands/` and the vendored skills are merged: the shipped files are written
+  over the existing tree, a file the user changed is kept with a backup, and a
+  file the installer did not put there is never removed.
 - The skill install runs through the `skills` CLI, which rewrites `SKILL.md`
   on every run. The opt out for user invoked skills is therefore applied
   after every install, and it has to be idempotent.

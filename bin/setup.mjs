@@ -524,8 +524,10 @@ for (const name of AUTOINVOKE_SKILLS) {
   log(`  autoinvoke ${name} -> ${patchAutoinvoke(join(SKILLS_DIR, name, "SKILL.md"))}`);
 }
 // Vendored local/workflow skills (skills/ in this repo) — cannot be installed
-// via `skills add`, copied verbatim. Overwrite is correct (versioned content,
-// unlike .env.example above).
+// via `skills add`. The shipped tree is merged over the installed one: the
+// versioned files are replaced, a file the user added is kept, and a file the
+// user changed in a shipped one is replaced like the rest of the versioned
+// content (unlike .env.example above).
 const VENDORED_SKILLS = ["architect", "audit", "check", "code-review", "debug", "design-system", "develop", "document", "kodus-review", "living-docs", "opencode-github", "pr-agent", "repo-standards", "scope", "ship", "skill-routing", "sync", "test", "write-swift"];
 for (const name of VENDORED_SKILLS) {
   const src = join(REPO, "skills", name);

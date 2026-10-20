@@ -31,7 +31,8 @@ Applied in this order, by `reconcile-review.mjs`:
    blocker or major outside them is kept and marked, because a real problem
    next to the change is still worth a human look.
 3. **Deduplicate**: same file, line bucket, and category collapse into one
-   finding. The highest confidence wins, the sources merge.
+   finding. The most severe one wins, confidence breaks a tie inside one
+   severity, and the sources merge.
 4. **Rank**: blocker, major, minor, nit; then confidence descending.
 5. **Cap**: `--max-findings` (default 32). Overflow is counted, not listed. Use
    `--max-findings all` when the change is high risk.
@@ -83,7 +84,9 @@ Rules:
   The summary is the review record. If inline comments are ever needed, they
   must be validated against the PR diff at post time, not the local worktree.
 - **No secrets**: `post-review.mjs` redacts private key blocks, common token
-  prefixes, JWTs, and `KODUS_TEAM_KEY` style assignments before posting. The
+  prefixes, JWTs, `KODUS_TEAM_KEY` style assignments, and generic
+  `api_key` / `secret` / `password` / `token` assignments of twelve characters
+  or more, before posting. The
   report is also local, so nothing leaves the machine until `--apply`.
 - **Bounded**: bodies over 60,000 characters are truncated with a pointer to
   the local report.
