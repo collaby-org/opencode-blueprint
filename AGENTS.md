@@ -7,9 +7,10 @@ file carries the rules and the pointers.
 ## Workflow
 
 1. **Isolate — `new-feature`.** Established projects only: every feature
-   starts in a worktree branched from `origin/main`, on the dedicated
-   worktree drive (`F:\worktrees\<repo>\<branch>`) — never on the system
-   drive (C:) and never inside the repository's own location. Never build on
+   starts in a worktree branched from `origin/main`, on the same drive as the
+   repository (`D:\Work\worktrees\<repo>\<branch>` for a repository on `D:`) —
+   never on the system drive (C:) unless the repository itself lives there,
+   and never inside the repository's own location. Never build on
    `main`. New builds and
    migrations start at `/scope` first (new build → `/scope` then
    `/new-feature`; migration → `/scope` then the plan). When project context
@@ -28,14 +29,16 @@ file carries the rules and the pointers.
    on the final HEAD. Nothing commits before Kodus is clean; nothing ships
    before the review is clean. If any later step changes code, rerun the
    review — the gate rejects a stale HEAD.
-4. **Ship.** Push the branch, open the PR with evidence and
-   `version: before → after`, sync the review comment, update living docs and
-   the changelog of the folder worked in, in the same commit as the change,
-   then `/document` and `/unslop`. `/check review` is
+4. **Ship.** Push the branch to the remote and open a pull request: a pull
+   request that only exists on this machine is not done. Every change lands
+   through a new PR — never a direct commit or push to `main`. Fill the PR with
+   evidence and `version: before → after`, sync the review comment, update
+   living docs and the changelog of the folder worked in, in the same commit as
+   the change, then `/document` and `/unslop`. `/check review` is
    an optional single quick read; it never replaces `/code-review`. PR-Agent
-   and Kodus review comments go to zero before presenting the URL. The change
-   lands through the PR: never commit or push directly to `main`. Do not
-   merge unless told; keep the worktree until merge, delete it after.
+   and Kodus review comments go to zero before presenting the URL. Merging is
+   the human's decision: never merge unless told. Keep the worktree until
+   merge, delete it after.
    `/sync` is HUMAN-ONLY: never invoke it without explicit authorization in
    that same task, never auto-chained.
 
@@ -130,12 +133,15 @@ package boundaries. Stale system docs are a bug.
 
 ## Multi-agent rules
 
-One worktree and one branch per task/agent, on the dedicated worktree drive
-(`F:\worktrees\<repo>\<branch>`) — never on the system drive (C:), never
-inside the repository's own location; never touch another agent's worktree,
-branch, or uncommitted work. Scope check first (`gh pr list`, `gh pr diff <n>
---name-only`). Never commit or push directly to `main`: branch → PR → review →
-merge, every change lands through a pull request; tags only from the merged
+One worktree and one branch per task/agent, on the same drive as the
+repository (`D:\Work\worktrees\<repo>\<branch>` for a repository on `D:`) —
+never on the system drive (C:) unless the repository itself lives there,
+never inside the repository's own location; never touch another agent's
+worktree, branch, or uncommitted work. Scope check first (`gh pr list`, `gh pr
+diff <n> --name-only`). Every change lands through a new pull request: never
+commit or push directly to `main` — branch → push → PR → review → merge.
+Push the branch: a pull request that only exists on this machine is not
+done. Merging is the human's decision; tags only from the merged
 commit. Never plain `--force`; `--force-with-lease` on your own branch only.
 Regenerate lockfiles, never hand-merge. Worktrees do not
 isolate ports or databases — confirm the port answers your process; no schema
