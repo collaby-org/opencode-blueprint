@@ -38,7 +38,7 @@ jobs:
         if: ${{ env.LLM_API_KEY != '' }}
         # Pinned to the main commit of 2026-10-20 (b4c3d11). Bump it
         # deliberately in review; a mutable @main receives this job's secrets.
-        uses: the-pr-agent/pr-agent@b4c3d11d2247dce6f716074c5352c3f97d6564df
+        uses: the-pr-agent/pr-agent@729415c68b8ef55df8bcce919a419af7f5cebffb
         env:
           OPENAI__API_BASE: ${{ secrets.LLM_API_BASE }}
           OPENAI__KEY: ${{ secrets.LLM_API_KEY }}
