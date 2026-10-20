@@ -40,22 +40,21 @@ function readJson(path) {
 }
 
 // The plugin server does not start in the project directory, so `process.cwd()`
-// can point at the opencode config home instead of the checkout. Resolve the
-// project root from the plugin context in `setup` and use it for git and the
-// per-repo review config.
-let projectRoot = process.cwd();
-
-function reviewConfig() {
+// can point at the opencode config home instead of the checkout. V2 exposes
+// the loaded location as `ctx.location.directory` (not `ctx.directory`), and a
+// session can point at a worktree: resolve the session's location at hook time
+// and fall back to the plugin location, never to the server cwd.
+function reviewConfig(root: string) {
   return {
     ...(readJson(join(homedir(), ".config", "opencode", "review.json")) || {}),
-    ...(readJson(join(projectRoot, ".opencode", "review.json")) || {}),
+    ...(readJson(join(root, ".opencode", "review.json")) || {}),
   };
 }
 
-function git(args) {
+function git(args: string[], root: string) {
   try {
     return execFileSync("git", args, {
-      cwd: projectRoot,
+      cwd: root,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
       maxBuffer: 8 * 1024 * 1024,
@@ -65,31 +64,31 @@ function git(args) {
   }
 }
 
-function gitDir() {
-  const dir = git(["rev-parse", "--absolute-git-dir"]);
+function gitDir(root: string) {
+  const dir = git(["rev-parse", "--absolute-git-dir"], root);
   return dir || null;
 }
 
-function statePath() {
-  const gd = gitDir();
+function statePath(root: string) {
+  const gd = gitDir(root);
   return gd ? join(gd, "code-review", "last-result.json") : null;
 }
 
-function readState() {
-  const path = statePath();
+function readState(root: string) {
+  const path = statePath(root);
   if (!path) return { path: null, state: null, head: null };
-  return { path, state: readJson(path), head: git(["rev-parse", "HEAD"]) };
+  return { path, state: readJson(path), head: git(["rev-parse", "HEAD"], root) };
 }
 
 // A review made on the working tree records the HEAD it sat on top of. Once
 // that tree is committed, HEAD moves and the review would look stale although
 // it covered exactly this content. Accept it when the reviewed head is HEAD^.
 // Exported so the rule can be probed without driving the whole hook.
-export function reviewCoversHead(state, head) {
+export function reviewCoversHead(state, head, root = process.cwd()) {
   if (!state || !head || !state.head) return false;
   if (state.head === head) return true;
   if (state.mode !== "uncommitted") return false;
-  const parent = git(["rev-parse", "HEAD^"]);
+  const parent = git(["rev-parse", "HEAD^"], root);
   return Boolean(parent && parent === state.head);
 }
 
@@ -587,8 +586,30 @@ export function isPrCreate(command: string): boolean {
 export default define({
   id: "opencode-code-review",
   async setup(ctx) {
-    const directory = (ctx as unknown as { directory?: string }).directory;
-    if (directory) projectRoot = directory;
+    // The V2 runtime context is richer than the published compat types.
+    // `location` is where this plugin instance loaded; `session` resolves the
+    // per-session location (a worktree is a different git dir from its project).
+    const context = ctx as unknown as {
+      location?: { directory?: string };
+      session?: {
+        get: (input: { sessionID: string }) => Promise<{ location?: { directory?: string } } | undefined>;
+      };
+    };
+    const pluginRoot = context.location?.directory || null;
+
+    const resolveRoot = async (sessionID?: string): Promise<string | null> => {
+      if (sessionID && context.session?.get) {
+        try {
+          const session = await context.session.get({ sessionID });
+          const directory = session?.location?.directory;
+          if (directory) return directory;
+        } catch {
+          // Fall through to the plugin location; a failed lookup must not
+          // silently disable the gate.
+        }
+      }
+      return pluginRoot;
+    };
 
     await ctx.agent.transform((draft) => {
       draft.update("code-review", (agent) => {
@@ -622,8 +643,16 @@ export default define({
         description:
           "Return whether the current HEAD has a complete code review, its verdict, and the report path. Read only.",
         input: { type: "object", properties: {}, additionalProperties: false },
-        async execute() {
-          const { path, state, head } = readState();
+        async execute(_input, toolContext) {
+          const root = await resolveRoot(
+            (toolContext as { sessionID?: string } | undefined)?.sessionID,
+          );
+          if (!root) {
+            return {
+              content: JSON.stringify({ error: "cannot resolve the project directory for this session" }),
+            };
+          }
+          const { path, state, head } = readState(root);
           if (!path) return { content: JSON.stringify({ error: "not a git repository" }) };
           if (!state) {
             return {
@@ -641,8 +670,12 @@ export default define({
                 reviewed: true,
                 head,
                 reviewedHead: state.head,
-                fresh: reviewCoversHead(state, head),
-                via: state.head === head ? "head" : reviewCoversHead(state, head) ? "commit" : "none",
+                fresh: reviewCoversHead(state, head, root),
+                via: state.head === head
+                  ? "head"
+                  : reviewCoversHead(state, head, root)
+                    ? "commit"
+                    : "none",
                 complete: state.complete !== false,
                 verdict: state.verdict,
                 counts: state.counts,
@@ -661,7 +694,7 @@ export default define({
 
     // The gate. A hook, not an instruction: `gh pr create` cannot run until a
     // complete review of the current HEAD passed.
-    await ctx.tool.hook("execute.before", (event) => {
+    await ctx.tool.hook("execute.before", async (event) => {
       const ev = (event ?? {}) as Record<string, unknown>;
       const toolName = typeof ev.tool === "string" ? ev.tool : "";
       if (toolName !== "bash" && toolName !== "shell") return;
@@ -677,19 +710,34 @@ export default define({
       const verdict = prCreateVerdict(command);
       if (!verdict.gated) return;
 
-      const config = reviewConfig();
+      const root = await resolveRoot(typeof ev.sessionID === "string" ? ev.sessionID : undefined);
+      if (!root) {
+        throw new Error(
+          "Blocked: cannot resolve the project directory for this checkout. " +
+            "The gate refuses to guess from the server working directory. " +
+            "Drafts are allowed, and `enforce_pr_gate: false` in .opencode/review.json disables this gate.",
+        );
+      }
+
+      const config = reviewConfig(root);
       if (config.enforce_pr_gate === false) return;
 
-      const { state, head } = readState();
+      const { path, state, head } = readState(root);
       const run = "Run `/code-review` (or the `code-review` skill) first.";
 
+      if (!path) {
+        throw new Error(
+          `Blocked: cannot find a git repository at ${root}. The gate refuses to guess. ${run} ` +
+            `Drafts are allowed, and \`enforce_pr_gate: false\` in .opencode/review.json disables this gate.`,
+        );
+      }
       if (!state) {
         throw new Error(
           `Blocked: this repository has no code review artifact for the current checkout. ${run} ` +
             `Drafts are allowed, and \`enforce_pr_gate: false\` in .opencode/review.json disables this gate.`,
         );
       }
-      if (head && !reviewCoversHead(state, head)) {
+      if (head && !reviewCoversHead(state, head, root)) {
         throw new Error(
           `Blocked: the last code review covers ${String(state.head).slice(0, 8)}, but HEAD is ${String(head).slice(0, 8)}. ` +
             `The review is stale. ${run}`,

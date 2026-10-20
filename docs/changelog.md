@@ -9,6 +9,16 @@ Version 1.0.0 was published to npm but never got a git tag, so it has no tag
 range. The npm publish timestamps are UTC and can sit a day earlier than the
 commit date of the same version.
 
+## [1.3.4] - 2026-10-20
+
+### Fixed
+
+- The gate reads `ctx.location.directory` — the V2 setup context has no
+  `ctx.directory` — and resolves the session's location per invocation, so a
+  worktree checks its own `.git/code-review/last-result.json` instead of the
+  project's. When no location can be resolved it fails closed with a named
+  error instead of falling back to the server working directory.
+
 ## [1.3.3] - 2026-10-20
 
 ### Fixed
@@ -34,7 +44,7 @@ commit date of the same version.
 
 ## [1.3.1] - 2026-10-20
 
-Review fixes for 1.3.0. The branch lands as 1.3.3.
+Review fixes for 1.3.0. The branch lands as 1.3.4.
 
 ### Fixed
 
