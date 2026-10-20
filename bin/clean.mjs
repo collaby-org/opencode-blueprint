@@ -43,7 +43,7 @@
 
 import { existsSync, lstatSync, readdirSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { join, resolve, sep } from "node:path";
+import { join, parse, resolve, sep } from "node:path";
 
 // ------------------------------------------------------------------ options --
 
