@@ -129,7 +129,7 @@ finished answer — researched, de-duplicated, and verified working together:
 
 1. **Isolate** — fresh worktree per feature (established projects; skipped for new apps/migrations); `/scope` first for new builds/migrations, `/audit` human-only when context stale.
 2. **Build** — `/develop` (+ `code-structure` + stack skills, `design-system` for UI); → `/architect` spec when a decision is owed; `/debug` anytime.
-3. **Prove** — runtime evidence (before/after) + `/check verify` vs spec, `/test` owns the suite; then **`/code-review`** (cross model, confidence gated), then the **Kodus loop** to clean.
+3. **Prove** — runtime evidence (before/after) + `/check verify` vs spec, `/test` owns the suite; then the **Kodus loop** on the staged diff, commit, rebase on `origin/main`, rerun the checks, and **`/code-review`** (cross model, confidence gated) on the final HEAD.
 4. **Ship** — `/code-review` synced to the PR, `/check review`, PR with evidence, `/document`, `/unslop` prose, **PR-Agent + Kodus at zero** (`/sync` human-only, never auto-chained).
 
 Design bar: Apple-clean, invisible motion (`transform`/`opacity`, <300ms,

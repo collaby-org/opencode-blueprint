@@ -31,11 +31,16 @@ and output for the logic underneath.
 
 ## Flow
 
+The full order lives in `AGENTS.md`; this is the short form.
+
 1. Run `/check verify` and make the change pass against its spec.
-2. Run the local code review (`/code-review`) on a model that did not write the
-   code. Fix what it finds.
-3. Run the Kodus review loop (`/kodus-review`) until it reports zero comments.
-4. Commit with a conventional message.
+2. Run the Kodus review loop (`/kodus-review`) on the staged diff until it is
+   clean.
+3. Commit with a conventional message, then rebase on the default branch and
+   rerun the checks.
+4. Run the local code review (`/code-review`) on the final HEAD, on a model
+   that did not write the code. Fix what it finds; a change after the review
+   makes it stale, so rerun it.
 5. Open the pull request, fill every section of the template, and state
    `version: before → after`.
 

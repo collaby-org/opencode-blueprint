@@ -21,8 +21,8 @@ This repository treats two checks as required and two review jobs as advisory.
   otherwise.
 
 Advisory jobs inform the review. They never replace the local gate:
-`/check verify`, the local code review, and the Kodus loop run before the
-commit.
+`/check verify` and the Kodus loop run before the commit, and the local code
+review runs on the final HEAD, after the rebase and before the pull request.
 
 ## Forks and secrets
 

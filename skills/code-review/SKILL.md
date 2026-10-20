@@ -121,27 +121,20 @@ Rules:
 
 The same `review.json` file is read by the `opencode-review` plugin, but the
 two read different keys: this gate uses `model` and `fallback_models`, that
-plugin uses `language`, `dimensions`, `max_diff_lines` and `trigger`. Read the
-file, do not rewrite it.
+plugin uses `language`, `dimensions`, `max_diff_lines`, `trigger`,
+`custom_rules` and `parallel`. Read the file, do not rewrite it.
 
 ---
 
-## Step 1: Kodus, locally, on the staged diff
+## Step 1: confirm the Kodus loop ran
 
-Before the commit, on the staged diff:
-
-```
-kodus review --prompt-only --staged --fail-on error
-```
-
-Stage first so the diff is small. Fix valid findings, run the repo checks,
-rerun until it exits 0. The full loop lives in the `kodus-review` skill.
-
-Why here: Kodus reviews the staged diff, so it runs before the commit. The
-cross-model gate reviews the tree that will be pushed, so it runs after the
-rebase. Two reviewers, two different trees, each on the shape it can see.
-
-No Kodus CLI installed: say so and continue. Never fake the result.
+The Kodus loop runs on the staged diff, before the commit (see Order of
+operations). This review starts after the rebase, so the staged diff is
+already committed: confirm that the Kodus loop ran on this change. If it did
+not, run the `kodus-review` skill against the committed diff now
+(`kodus review --branch <base> --fail-on error`), fix what it finds, and only
+then continue. A review of a change that skipped the Kodus gate is not a
+finished gate.
 
 ---
 
