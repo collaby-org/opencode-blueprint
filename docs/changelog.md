@@ -9,6 +9,45 @@ Version 1.0.0 was published to npm but never got a git tag, so it has no tag
 range. The npm publish timestamps are UTC and can sit a day earlier than the
 commit date of the same version.
 
+## [1.4.0] - 2026-10-20
+
+### Added
+
+- `repo-standards` skill: the baseline every repository carries — `AGENTS.md`,
+  `CONTRIBUTING.md`, `CLAUDE.md` (`@AGENTS.md`), a PR template, issue forms,
+  `CODEOWNERS`, `dependabot.yml`, `SECURITY.md`, and SHA-pinned CI and
+  secret-scan workflows. `standards.mjs --check` verifies a repository;
+  `--apply` scaffolds only what is missing and never overwrites a curated
+  file. Installs globally with the skills.
+- `skill-routing` skill: the routing table, moved out of `AGENTS.md`.
+
+### Changed
+
+- `AGENTS.md` slimmed to the industry-standard shape: hard rules and
+  pointers, with the procedures in the skills that own them.
+- The versioning and docs flow is explicit: one version line per app or
+  workstream, one PR one bump, the changelog of the folder that was worked in,
+  and the resolved docs home updated with the change — including a linked
+  documentation repository outside the repository.
+- Worktrees live on the dedicated worktree drive, never on the system drive
+  and never inside the repository's own location.
+- `bin/clean.mjs` reclaims package-manager caches, old opencode logs and aged
+  temp directories, and never touches the installed plugin tree, a worktree's
+  `node_modules`, or anything a live session may be reading.
+- The `orchestrator` agent ships in `config/agents/` and installs to
+  `~/.config/opencode/agents/`. V2 reads agent markdown from `agents/`; the
+  V1 `agent/` directory registered nothing, which is what produced
+  `Agent not found: "orchestrator"` in restored sessions.
+
+### Fixed
+
+- The workflow conflicts the audit found: the rebase now happens before the
+  review, `/check review` no longer carries Claude-only model detection and
+  no longer writes the gate's report path, the Kodus command and the PR-Agent
+  scaffold match the skills they duplicate, and the opencode GitHub skill no
+  longer promises workflow files that do not exist.
+- `docs/conventions.md` now exists; ten skills referenced it.
+
 ## [1.3.5] - 2026-10-20
 
 ### Fixed

@@ -1,0 +1,64 @@
+name: Bug report
+description: Report something that behaves incorrectly.
+title: "[bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Never paste `.env` files, tokens, keys, passwords, or customer data.
+        Redact values before you post logs or screenshots. Report security
+        problems through the private channel in `.github/SECURITY.md`, not here.
+
+  - type: checkboxes
+    id: duplicate-search
+    attributes:
+      label: Duplicate search
+      description: Search the open and closed issues before you file.
+      options:
+        - label: I searched the existing issues and did not find this problem.
+          required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: The actual behavior, with the smallest useful detail.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: The behavior you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps another person can follow.
+      placeholder: |
+        1. Go to ...
+        2. Run ...
+        3. See ...
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: The release, tag, or commit where you saw this.
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, runtime version, browser, and anything else that matters.
+    validations:
+      required: false

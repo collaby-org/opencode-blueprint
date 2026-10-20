@@ -311,6 +311,19 @@ cp(join(REPO, "config", "commands"), join(TARGET, "commands"));
 // V2 reads agent markdown from `agents/` (plural); the v1 `agent/` directory
 // is ignored, which is why the file used to be missing at runtime.
 cp(join(REPO, "config", "agents"), join(TARGET, "agents"));
+// The V1 `agent/` directory is ignored by V2. When it holds nothing but the
+// file this installer put there, remove it, so a stale copy cannot be
+// mistaken for the live one. Anything else in it belongs to the user.
+const legacyAgentDir = join(TARGET, "agent");
+if (existsSync(legacyAgentDir)) {
+  const legacyEntries = readdirSync(legacyAgentDir);
+  if (legacyEntries.length === 1 && legacyEntries[0] === "orchestrator.md") {
+    rmSync(legacyAgentDir, { recursive: true, force: true });
+    log(`  removed ${legacyAgentDir} (V2 reads agents/)`);
+  } else {
+    log(`  keep ${legacyAgentDir} (holds ${legacyEntries.length} entries, not ours)`);
+  }
+}
 cp(join(REPO, "config", "plugins", "opencode-review"), join(TARGET, "plugins", "opencode-review"));
 cp(join(REPO, "config", "plugins", "opencode-code-review"), join(TARGET, "plugins", "opencode-code-review"));
 cp(join(REPO, "config", "plugins", "opencode-dcp"), join(TARGET, "plugins", "opencode-dcp"));

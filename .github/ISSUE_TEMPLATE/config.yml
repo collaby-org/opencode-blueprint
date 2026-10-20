@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/collaby-org/opencode-blueprint/security/advisories/new
+    about: Report a vulnerability privately. Never open a public issue for a security problem.
+  - name: Security policy
+    url: https://github.com/collaby-org/opencode-blueprint/blob/main/.github/SECURITY.md
+    about: Read the disclosure scope and the private contact before you report.

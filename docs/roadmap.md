@@ -13,12 +13,18 @@ the last releases delivered.
   sources `cathrynlavery/diagram-design`, `heygen-com/hyperframes` and
   `mattpocock/skills`, and the skill count corrected from 94 to 119 in the
   `package.json` description. Shipped in 1.2.7.
-- [ ] Release the local code review gate and the versioned docs flow as 1.3.5:
+- [ ] Release the local code review gate and the versioned docs flow as 1.4.0:
   the `code-review` skill, the `opencode-code-review` plugin, the two GitHub
-  workflows, the `AGENTS.md` docs/version rules and the skill updates are in
-  the working tree. Done when the tag exists, a fresh install loads the plugin
-  (`/code-review` present, `gh pr create` gated) and the docs rule is enforced
-  on the next project.
+  workflows, the `AGENTS.md` docs/version rules, the `repo-standards`
+  scaffold, the slim `AGENTS.md` and the skill updates are in the working
+  tree. Done when the tag exists, a fresh install loads the plugin
+  (`/code-review` present, `gh pr create` gated), the agent file lands in
+  `~/.config/opencode/agents/` and the docs rule is enforced on the next
+  project.
+- [ ] Confirm the standards flow on a repository outside this one.
+  `standards.mjs --check` must pass on a project that already carries the
+  baseline, and a second `--apply` must change nothing. Done when a project
+  outside this repository passes the check and keeps its curated files.
 - [ ] Arm the GitHub side gates. `.github/workflows/kodus.yml` and
   `.github/workflows/pr-agent.yml` skip their review step while
   `KODUS_TEAM_KEY` and `LLM_API_KEY` are absent, so nothing goes red before
