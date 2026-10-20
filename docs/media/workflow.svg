@@ -34,7 +34,7 @@
       <text class="label" x="22" y="34" fill="#F2F5FF" font-size="19" font-weight="700">1 · Isolate</text>
       <text class="label" x="22" y="58" fill="#93A5C8" font-size="13.5">A worktree per task, on the</text>
       <text class="label" x="22" y="76" fill="#93A5C8" font-size="13.5">repository's own drive.</text>
-      <text class="gate" x="22" y="120" fill="#5B8CFF" font-size="13">· new-feature</text>
+      <text class="label mono gate" x="22" y="120" fill="#5B8CFF" font-size="13">· new-feature</text>
     </g>
     <line x1="262" y1="48" x2="296" y2="48" stroke="#33436B" stroke-width="2" marker-end="url(#arrow)"/>
 
@@ -43,7 +43,7 @@
       <text class="label" x="22" y="34" fill="#F2F5FF" font-size="19" font-weight="700">2 · Build</text>
       <text class="label" x="22" y="58" fill="#93A5C8" font-size="13.5">/develop plus the stack</text>
       <text class="label" x="22" y="76" fill="#93A5C8" font-size="13.5">skills, one scope per lane.</text>
-      <text class="gate g2" x="22" y="120" fill="#6E7BFF" font-size="13">· agents-scope --check</text>
+      <text class="label mono gate g2" x="22" y="120" fill="#6E7BFF" font-size="13">· agents-scope --check</text>
     </g>
     <line x1="562" y1="48" x2="596" y2="48" stroke="#33436B" stroke-width="2" marker-end="url(#arrow)"/>
 
@@ -52,7 +52,7 @@
       <text class="label" x="22" y="34" fill="#F2F5FF" font-size="19" font-weight="700">3 · Prove</text>
       <text class="label" x="22" y="58" fill="#93A5C8" font-size="13.5">Checks, runtime evidence,</text>
       <text class="label" x="22" y="76" fill="#93A5C8" font-size="13.5">Kodus, then the review gate.</text>
-      <text class="gate g3" x="22" y="120" fill="#7C5BFF" font-size="13">· /code-review</text>
+      <text class="label mono gate g3" x="22" y="120" fill="#7C5BFF" font-size="13">· /code-review</text>
     </g>
     <line x1="862" y1="48" x2="896" y2="48" stroke="#33436B" stroke-width="2" marker-end="url(#arrow)"/>
 
@@ -61,7 +61,7 @@
       <text class="label" x="22" y="34" fill="#F2F5FF" font-size="19" font-weight="700">4 · Ship</text>
       <text class="label" x="22" y="58" fill="#93A5C8" font-size="13.5">A pull request, pushed,</text>
       <text class="label" x="22" y="76" fill="#93A5C8" font-size="13.5">and a human merge.</text>
-      <text class="gate g4" x="22" y="120" fill="#2EE6A8" font-size="13">· gh pr create</text>
+      <text class="label mono gate g4" x="22" y="120" fill="#2EE6A8" font-size="13">· gh pr create</text>
     </g>
 
     <path class="sweep" d="M125 150 L125 176 L1010 176 L1010 150" fill="none" stroke="url(#wg)" stroke-width="2" stroke-dasharray="6 10" opacity="0.8"/>

@@ -32,13 +32,13 @@ npx opencode-blueprint
 
 - **20** Vendored skills — the workflow, the standards and the mind map
 - **18** Skill sources — 85 named skills, the rest whole repositories
-- **22** MCP servers — live access
+- **22** MCP servers — in the shipped config; the GCP remotes and kubernetes wait for credentials
 - **11** Plugins — local plus the slim bundle
-- **3** Commands — global, in any project
+- **3** Commands — in config/commands; three more are registered by plugins
 - **1** Agents — the orchestrator
 - **4** CI workflows — pinned to commit SHAs
 - **14** Repo templates — the baseline every repo gets
-- **v1.4.3** Version — published to npm
+- **v1.4.3** Version — in package.json; published on release
 
 <!-- stats:end -->
 
@@ -118,7 +118,7 @@ that depend on them run in the next wave.
 | Project & code | `notion`, `github`, `figma`, `sentry` |
 | Docs & design | `context7`, `lucide-animated`, `expo` |
 | Data | `supabase`, `prisma`, `postgres`, `mongodb`, `redis` |
-| Cloud & infra | `gcp-bigquery`, `gcp-compute`, `gcp-k8s`, `gcp-run`, `gcp-storage`, `cloudflare`, `kubernetes` |
+| Cloud & infra | `gcp-bigquery`, `gcp-compute`, `gcp-gke`, `gcp-run`, `gcp-storage`, `cloudflare`, `kubernetes` |
 | Payments & analytics | `stripe`, `google-analytics` |
 | Reverse engineering | `rea` (pinned `rea-agents@6.5.0`; binaries, JS/Electron, .NET, APKs, firmware — needs provider tools for deep native work) |
 
@@ -308,13 +308,14 @@ the installer needs — so do not put a credential in a tracked file.
 | Path | What |
 |---|---|
 | `AGENTS.md` | Global workflow (source of truth) |
-| `config/opencode.jsonc` | 22 MCPs (5 GCP remotes disabled — no dynamic client registration) · 1 npm + 10 local plugins · instructions |
+| `config/opencode.jsonc` | 22 MCPs (5 GCP remotes and the local kubernetes server disabled until they have credentials) · 1 npm + 10 local plugins · instructions |
 | `config/commands/` | `/pr-agent`, `/pr-agent-setup`, `/kodus-review` (plus `/code-review`, registered by the `opencode-code-review` plugin) |
 | `config/agents/` | The `orchestrator` agent, installed to `~/.config/opencode/agents/` |
 | `config/plugins/` | 10 local plugin trees: `opencode-review`, `opencode-code-review`, `opencode-mem` (wrapper), `opencode-dcp` (vendored 3.2.0), + 6 v2 ports (github-release, telemetry, envsitter-guard, log-sanitizer, command-inject, ralph-wiggum) |
 | `skills/` | The vendored workflow skills, the `repo-standards` baseline and the `mindmap` skill (the rest come from the installer registry list) |
 | `config/.env.example` | Required env vars (values never committed) |
 | `bin/setup.mjs` | The installer |
+| `bin/standards.mjs` | The repo-standards checker CI runs (the same script, installed globally as the `repo-standards` skill) |
 | `bin/agents-scope.mjs` | The parallel dispatch check: scope conflicts, dependencies, waves, and what a lane actually changed. Installed to `~/.config/opencode/tools/agents-scope.mjs`, so it works in any project |
 | `bin/readme-stats.mjs` | The numbers in this README, counted from the repository |
 | `bin/clean.mjs` | Disk reclamation: report by default; `--apply` deletes package-manager caches and day-old review scratch, never the plugin tree or worktree `node_modules`. Installed to `~/.config/opencode/tools/clean.mjs` |

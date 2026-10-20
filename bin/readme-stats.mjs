@@ -73,13 +73,13 @@ const templates = (function countFiles(dir) {
 const stats = [
   { label: "Vendored skills", value: dirs("skills"), note: "the workflow, the standards and the mind map" },
   { label: "Skill sources", value: sources.sources, note: `${sources.named} named skills, the rest whole repositories` },
-  { label: "MCP servers", value: mcpCount(), note: "live access" },
+  { label: "MCP servers", value: mcpCount(), note: "in the shipped config; the GCP remotes and kubernetes wait for credentials" },
   { label: "Plugins", value: dirs("config/plugins") + 1, note: "local plus the slim bundle" },
-  { label: "Commands", value: files("config/commands", ".md"), note: "global, in any project" },
+  { label: "Commands", value: files("config/commands", ".md"), note: "in config/commands; three more are registered by plugins" },
   { label: "Agents", value: files("config/agents", ".md"), note: "the orchestrator" },
   { label: "CI workflows", value: files(".github/workflows", ".yml"), note: "pinned to commit SHAs" },
   { label: "Repo templates", value: templates, note: "the baseline every repo gets" },
-  { label: "Version", value: `v${pkg.version}`, note: "published to npm" },
+  { label: "Version", value: `v${pkg.version}`, note: "in package.json; published on release" },
 ];
 
 const strip = [

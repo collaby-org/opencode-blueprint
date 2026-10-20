@@ -35,8 +35,8 @@ file carries the rules and the pointers.
    evidence and `version: before → after`, sync the review comment, update
    living docs and the changelog of the folder worked in, in the same commit as
    the change, then `/document` and `/unslop`. `/check review` is
-   an optional single quick read; it never replaces `/code-review`. PR-Agent
-   and Kodus review comments go to zero before presenting the URL. Merging is
+   an optional single quick read; it never replaces `/code-review`. The bar
+   for the review comments is in the PR-Agent preset. Merging is
    the human's decision: never merge unless told. Keep the worktree until
    merge, delete it after.
    `/sync` is HUMAN-ONLY: never invoke it without explicit authorization in
@@ -219,4 +219,3 @@ exist before checking `.github/workflows/`.
 
 Load the `ship` skill for the full end-of-task protocol; the four beats above
 are its order. `/check review` is optional and never replaces the gate.
-`/sync` and `/audit` are HUMAN-ONLY and never auto-chained.

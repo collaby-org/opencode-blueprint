@@ -42,7 +42,7 @@
     <rect x="0" y="0" width="214" height="46" rx="12" fill="#111A31" stroke="#2A3A63"/>
     <text class="mono" x="20" y="29" fill="#5B8CFF" font-size="16">npx opencode-blueprint</text>
     <rect x="232" y="0" width="120" height="46" rx="12" fill="#0E1A1A" stroke="#1E4A3C"/>
-    <text class="mono" x="252" y="29" fill="#2EE6A8" font-size="15">v1.4.3</text>
+    <text class="mono" x="252" y="29" fill="#2EE6A8" font-size="15">MIT</text>
     <text class="label" x="380" y="29" fill="#7D8DB0" font-size="16">Restart opencode. Create any folder. Start coding.</text>
   </g>
 

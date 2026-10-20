@@ -4,7 +4,7 @@
 //
 //   node bin/agents-scope.mjs --write .agents/lanes.json      # write a template
 //   node bin/agents-scope.mjs --check .agents/lanes.json       # exit 1 on a conflict
-//   node bin/agents-scope.mjs --verify .agents/lanes.json --changed a.js b.js
+//   node bin/agents-scope.mjs --verify .agents/lanes.json --changed a.js,b.js
 //
 // The manifest is the orchestrator's ledger:
 //
@@ -52,7 +52,7 @@ if (!write && !check && !verify) {
   console.log(`Usage:
   node bin/agents-scope.mjs --write <manifest.json>            write a template
   node bin/agents-scope.mjs --check <manifest.json>            report conflicts
-  node bin/agents-scope.mjs --verify <manifest.json> --changed <file>...
+  node bin/agents-scope.mjs --verify <manifest.json> --changed <file>,<file>
                                                                check the changed files`);
   process.exit(2);
 }
