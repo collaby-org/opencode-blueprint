@@ -378,6 +378,17 @@ function main() {
     }
   }
 
+  // Mirror the skill's dispatch rule (SKILL.md: "Passes" x "Agent budget"):
+  // one agent per chunk and pass while that fits the budget, otherwise one
+  // agent per chunk capped at the budget. reconcile-review defaults to this
+  // count, so a missing report must not pass as complete.
+  const passes = { quick: 1, standard: 3, deep: 5 }[args.level] ?? 3;
+  const agentBudget = { quick: 2, standard: 4, deep: 8 }[args.level] ?? 4;
+  const agents =
+    chunks.length * passes <= agentBudget
+      ? chunks.length * passes
+      : Math.min(chunks.length, agentBudget);
+
   const plan = {
     empty: chunks.length === 0,
     mode,
@@ -389,7 +400,7 @@ function main() {
     gitDir: gd,
     planDir,
     level: args.level,
-    agents: args.level === "quick" ? 1 : 2,
+    agents,
     budget: { maxContextTokens: maxContext, chunkTokens },
     totals: {
       files: files.length,

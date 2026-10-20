@@ -349,6 +349,10 @@ function commandStart(words: string[]): { prefix: string[]; words: string[]; pay
   while (rest.length > 0 && /^[({!]+$/.test(rest[0])) rest = rest.slice(1);
   if (rest.length > 0) rest[0] = rest[0].replace(/^[({!]+/, "");
   if (rest.length > 0) rest[rest.length - 1] = rest[rest.length - 1].replace(/\)+$/, "");
+  // A bare `$VAR` in command position resolves to a binary the parser cannot
+  // read. Mark it like `${...}` so the gate can fail closed instead of
+  // treating `$RUNNER pr create` as an unknown command.
+  if (rest.length > 0 && /^\$[A-Za-z_][A-Za-z0-9_]*$/.test(rest[0])) rest[0] = "__subst__";
   return { prefix, words: rest, payload };
 }
 
@@ -443,6 +447,16 @@ function suspiciousCreation(command: string, depth = 0): boolean {
     const { words } = commandStart(segment);
     if (words.length === 0) continue;
     const name = commandName(words[0]);
+    if (name === "__subst__") {
+      // `$RUNNER pr create` or `$(...) pr create`: the command word is
+      // unknown, so a literal `pr create` after it cannot be cleared.
+      const pr = words.findIndex((word, i) => i > 0 && word === "pr");
+      if (pr !== -1) {
+        const sub = words[pr + 1];
+        if (sub === "create" || sub === "new" || sub === "__subst__") return true;
+      }
+      continue;
+    }
     if (name !== "gh" && name !== "gh.exe") continue;
     // Find the `pr` word with the same value-skipping rule the invocation
     // parser uses, so `gh -R pr create` does not read the repo name as the

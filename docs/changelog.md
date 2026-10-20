@@ -9,9 +9,22 @@ Version 1.0.0 was published to npm but never got a git tag, so it has no tag
 range. The npm publish timestamps are UTC and can sit a day earlier than the
 commit date of the same version.
 
+## [1.3.2] - 2026-10-20
+
+### Fixed
+
+- Review gate: a bare `$VAR` in command position (`$GH pr create`,
+  `RUNNER=gh; $RUNNER pr create`) now resolves to the same fail-closed
+  `__subst__` path as `${VAR}` and `$(...)`, including behind wrappers.
+  The probe matrix is 95/95.
+- `plan-review.mjs` records the reviewer count from the skill's dispatch rule
+  (`chunks x passes` when it fits the level budget, otherwise one agent per
+  chunk capped at the budget) instead of a fixed 1/2, so `reconcile-review.mjs`
+  cannot report `complete` when a pass never reported.
+
 ## [1.3.1] - 2026-10-20
 
-Review fixes for 1.3.0. The branch lands as 1.3.1.
+Review fixes for 1.3.0. The branch lands as 1.3.2.
 
 ### Fixed
 
