@@ -567,11 +567,11 @@ const copyTreeAtomic = (from, to) => {
     rmSync(stage, { recursive: true, force: true });
   }
 };
-// Write text into a file atomically: stage it next to the destination and
-// swap it in. A truncate-write leaves a window in which the host reads an
-// empty file — and an empty opencode.jsonc takes every plugin, MCP and agent
-// with it. This is the path the MCP repoint takes, so it matters as much as
-// the copy.
+// Write text into a file atomically: stage it in the staging root (outside the
+// directories the host scans) and swap it in. A truncate-write leaves a window
+// in which the host reads an empty file — and an empty opencode.jsonc takes
+// every plugin, MCP and agent with it. This is the path the MCP repoint takes,
+// so it matters as much as the copy.
 const writeTextAtomic = (to, text) => {
   if (!guardFileDest(to)) return false;
   const stage = stageDir(to);

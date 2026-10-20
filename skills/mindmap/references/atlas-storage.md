@@ -19,23 +19,24 @@ full data structure plus metadata.
 
 ```javascript
 // Save a map
-const mapKey = `maps:${slugify(mindmapData.central)}`;
+const slug = mindmapData.central.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+const mapKey = `maps:${slug}`;
 window.localStorage.setItem(mapKey, JSON.stringify({
-  data: mindmapData,           // the full mindmapData object
-  palette: currentPaletteName, // which palette was active
-  layout: currentLayout,       // which layout mode
+  data: mindmapData,        // the full mindmapData object
+  palette: palName,         // which palette was active
+  layout: "radial",         // which layout mode
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
-  tags: [],                    // user-defined tags for filtering
+  tags: [],                 // user-defined tags for filtering
 }));
 
 // Load a map
 const result = window.localStorage.getItem(mapKey);
-const saved = JSON.parse(result.value);
+const saved = JSON.parse(result);
 
 // List all maps
 const keys = Object.keys(window.localStorage).filter(function(k) { return k.indexOf('maps:') === 0; });
-// keys.keys → ["maps:deep-work", "maps:macro-case-for-crypto", ...]
+// keys → ["maps:deep-work", "maps:macro-case-for-crypto", ...]
 
 // Delete a map
 window.localStorage.removeItem(mapKey);
@@ -55,8 +56,8 @@ Add a 💾 button to the control bar, after the fullscreen toggle. Behavior:
 The save function:
 
 ```javascript
-async function saveMap(mindmapData, paletteName, layout) {
-  const slug = slugify(mindmapData.central);
+function saveMap(mindmapData, paletteName, layout) {
+  const slug = mindmapData.central.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
   const key = `maps:${slug}`;
 
   let existing = null;
@@ -66,9 +67,9 @@ async function saveMap(mindmapData, paletteName, layout) {
     data: mindmapData,
     palette: paletteName,
     layout: layout || 'radial',
-    createdAt: existing ? JSON.parse(existing.value).createdAt : new Date().toISOString(),
+    createdAt: existing ? JSON.parse(existing).createdAt : new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    tags: existing ? JSON.parse(existing.value).tags : [],
+    tags: existing ? JSON.parse(existing).tags : [],
   };
 
   window.localStorage.setItem(key, JSON.stringify(record));
@@ -162,7 +163,7 @@ function findSharedConcepts(maps) {
   // Build a label → mapId index
   const labelIndex = new Map(); // label → Set of map slugs
   maps.forEach(map => {
-    const slug = slugify(map.data.central);
+    const slug = map.data.central.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
     const allLabels = extractAllLabels(map.data);
     allLabels.forEach(label => {
       // Normalize: lowercase, strip emoji, trim

@@ -49,9 +49,9 @@ commit date of the same version.
   `opencode.jsonc` — and an empty config takes every plugin, MCP and agent
   with it, which is what left the host without `oh-my-opencode-slim` and with
   two MCPs. A tree whose copy fails now leaves the destination alone, the
-  staging directory is removed when the copy fails, a link or a file the user
-  put in place is never replaced, and the copy says so when the staged file is
-  short or the source is empty.
+  staging directory is removed when the copy fails, a link or a directory the
+  user put in place is never replaced, and the copy says so when the staged
+  file is short or the source is empty.
 - The hygiene report looks for worktrees on the repository's own drive, not only
   on one fixed letter.
 - The `mindmap` skill no longer tells an agent to publish a page, store a map

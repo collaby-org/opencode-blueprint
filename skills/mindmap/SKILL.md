@@ -204,7 +204,7 @@ export default function MindMap() {
     var record = {
       data: mindmapData, palette: palName, layout: "radial",
       createdAt: existing ? JSON.parse(existing).createdAt : now,
-      updatedAt: now, tags: [],
+      updatedAt: now, tags: existing ? JSON.parse(existing).tags : [],
     };
     try {
       window.localStorage.setItem(key, JSON.stringify(record));
