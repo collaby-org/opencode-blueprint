@@ -1,7 +1,7 @@
 # OpenCode Blueprint
 
 > One command. A complete, opinionated, production-grade [opencode](https://opencode.ai)
-> environment - **22 MCPs, 11 plugins, 120 skills, a global agent workflow,**
+> environment - **22 MCPs, 11 plugins, 122 skills, a global agent workflow,**
 > and **Kodus + PR-Agent** review loops. Built for teams shipping
 > Apple-clean, award-worthy software.
 
@@ -145,7 +145,7 @@ The installer: checks prerequisites → backs up your existing config →
 copies `opencode.jsonc` + `AGENTS.md` + commands + `.env.example` starter →
 copies all 10 local plugin trees and installs each one's deps (plus the
 central `@opencode-ai/plugin` fallback the loader resolves against) →
-installs all 120 skills globally (registry via `skills add`, 17 workflow
+installs all 122 skills globally (registry via `skills add`, 17 workflow
 skills vendored from `skills/`) → installs the Kodus CLI
 and `redis-mcp-server` → installs the pinned `rea-agents`, `prisma`,
 `@modelcontextprotocol/server-postgres`, `mongodb-mcp-server`,
