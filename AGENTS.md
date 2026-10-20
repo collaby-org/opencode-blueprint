@@ -162,7 +162,9 @@ lanes overlap freely. Write the scope manifest and check it before dispatching
 and the result against it afterwards: `node ~/.config/opencode/tools/agents-scope.mjs
 --write .agents/lanes.json`, `--check`, `--verify --changed <file>,<file>`. The
 tool is installed globally; inside the blueprint repository the same file is
-`bin/agents-scope.mjs`. The full contract lives in the orchestrator agent.
+`bin/agents-scope.mjs`. If it is missing, say so and continue without the
+check — never fake a clean result. The full contract lives in the orchestrator
+agent.
 
 ## Disk hygiene (always)
 
