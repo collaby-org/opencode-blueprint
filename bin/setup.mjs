@@ -17,11 +17,44 @@ const TARGET =
 const SKILLS_DIR = join(homedir(), ".agents", "skills");
 
 const log = (m) => console.log(m);
+// A path that is not a regular file is never read or written: reading a
+// directory throws, and writing through a link would put the file outside
+// the config home. An installer that dies half way leaves a broken config
+// home, and a link is not ours to replace either.
+const isRegular = (p) => {
+  try {
+    const stat = lstatSync(p);
+    return stat.isFile() && !stat.isSymbolicLink();
+  } catch {
+    return false;
+  }
+};
+// A dangling link is a path that exists even though it resolves to nothing,
+// so existsSync() (which follows the link) says false. The destination checks
+// ask the path itself.
+const existsAny = (p) => {
+  try {
+    lstatSync(p);
+    return true;
+  } catch {
+    return false;
+  }
+};
 // Windows .cmd/.ps1 shims (npx, npm, kodus) need a shell to spawn.
 const SHELL = process.platform === "win32";
 const run = (cmd, args, opts = {}) => {
   log(`$ ${cmd} ${args.join(" ")}`);
-  if (!DRY) execFileSync(cmd, args, { stdio: "inherit", shell: SHELL, ...opts });
+  if (DRY) return true;
+  try {
+    execFileSync(cmd, args, { stdio: "inherit", shell: SHELL, ...opts });
+    return true;
+  } catch (error) {
+    // A step that fails (a network hiccup, a locked file, a path that is not a
+    // directory) is reported and skipped. The installer keeps going and says
+    // what it could not do; it does not die half way.
+    log(`  keep ${cmd} ${args.join(" ")} (failed: ${error && error.status ? `exit ${error.status}` : "see above"})`);
+    return false;
+  }
 };
 const has = (cmd) => {
   try {
@@ -36,7 +69,14 @@ const has = (cmd) => {
 // spaces in the path. execFileSync with an absolute path skips the shell.
 const runAbs = (exe, args) => {
   log(`$ ${exe} ${args.join(" ")}`);
-  if (!DRY) execFileSync(exe, args, { stdio: "inherit" });
+  if (DRY) return true;
+  try {
+    execFileSync(exe, args, { stdio: "inherit" });
+    return true;
+  } catch (error) {
+    log(`  keep ${exe} ${args.join(" ")} (failed: ${error && error.status ? `exit ${error.status}` : "see above"})`);
+    return false;
+  }
 };
 
 // ------------------------------------------------------- node runtime probe
@@ -81,7 +121,7 @@ const nodeCandidates = () => {
   const localAppData = process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local");
   const nvmRoot = join(localAppData, "nvm");
   if (existsSync(nvmRoot)) {
-    for (const entry of readdirSync(nvmRoot, { withFileTypes: true })) {
+    for (const entry of readDirSafe(nvmRoot)) {
       if (entry.isDirectory()) add(join(nvmRoot, entry.name, "node.exe"));
     }
   }
@@ -191,7 +231,15 @@ const AUTOINVOKE_VALUE = '"false"';
 // not-user-invoked | already-patched | patched | would-patch | unsupported
 const patchAutoinvoke = (file) => {
   if (!existsSync(file)) return "missing";
-  const text = readFileSync(file, "utf8");
+  let text;
+  try {
+    if (!isRegular(file)) return "unsupported";
+    text = readFileSync(file, "utf8");
+  } catch {
+    // A skill file that cannot be read (a directory, a locked file) is left
+    // alone: the mirror is cosmetic, never worth an aborted install.
+    return "unsupported";
+  }
   const fm = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!fm) return "no-frontmatter";
   const lines = fm[1].split(/\r?\n/);
@@ -248,7 +296,15 @@ const patchAutoinvoke = (file) => {
   const tail = text.slice(fm[0].length);
   const patched = `${head}${next.join(eol)}${eol}---${tail}`;
   if (patched === text) return "already-patched";
-  if (!DRY) writeFileSync(file, patched);
+  if (!DRY) {
+    try {
+      writeFileSync(file, patched);
+    } catch {
+      // A read-only or locked skill file keeps its content: the mirror is
+      // cosmetic, never worth an aborted install.
+      return "unsupported";
+    }
+  }
   return DRY ? "would-patch" : "patched";
 };
 
@@ -325,7 +381,7 @@ const rmSafe = (p) => {
 const readDirSafe = (dir) => {
   try {
     if (!lstatSync(dir).isDirectory()) return [];
-    return readdirSync(dir);
+    return readdirSync(dir, { withFileTypes: true });
   } catch {
     return [];
   }
@@ -342,7 +398,16 @@ ensureDir(TARGET);
 ensureDir(join(TARGET, "commands"));
 ensureDir(join(TARGET, "plugins"));
 const backup = (p) => {
-  if (existsSync(p) && !DRY) copyFileSync(p, `${p}.bak-${Date.now()}`);
+  // A directory or a locked file cannot be copied: the backup is skipped and
+  // the install continues.
+  if (DRY || !isRegular(p)) return false;
+  try {
+    copyFileSync(p, `${p}.bak-${Date.now()}`);
+    return true;
+  } catch {
+    log(`  keep ${p} (cannot be backed up)`);
+    return false;
+  }
 };
 backup(join(TARGET, "opencode.jsonc"));
 backup(join(TARGET, "AGENTS.md"));
@@ -351,29 +416,6 @@ backup(join(TARGET, "AGENTS.md"));
 const sameContent = (a, b) =>
   readFileSync(a, "utf8").replace(/\r\n/g, "\n") === readFileSync(b, "utf8").replace(/\r\n/g, "\n");
 
-// A path that is not a regular file is never read or written: reading a
-// directory throws, and writing through a link would put the file outside
-// the config home. An installer that dies half way leaves a broken config
-// home, and a link is not ours to replace either.
-const isRegular = (p) => {
-  try {
-    const stat = lstatSync(p);
-    return stat.isFile() && !stat.isSymbolicLink();
-  } catch {
-    return false;
-  }
-};
-// A dangling link is a path that exists even though it resolves to nothing,
-// so existsSync() (which follows the link) says false. The destination checks
-// ask the path itself.
-const existsAny = (p) => {
-  try {
-    lstatSync(p);
-    return true;
-  } catch {
-    return false;
-  }
-};
 // Copy a file, and never let one bad destination abort the install.
 const copyOrKeep = (from, to) => {
   try {
@@ -607,20 +649,28 @@ if (!existsSync(slimCfgDest)) {
 }
 
 log("== 3/6 local plugin deps (review, code-review, mem, dcp + 6 ports) ==");
-run("npm", ["install", "--prefix", join(TARGET, "plugins", "opencode-review"), "@opencode-ai/plugin"]);
+// The dependency installs write into the plugin directories: when the plugins
+// directory is a link or a file, npm would create it and write outside the
+// config home, so the step is skipped instead.
+const pluginPrefix = (dir) => join(TARGET, "plugins", dir);
+if (!pluginsDirReady) {
+  log(`  skip the plugin dependencies (${pluginsDir} is not ours to write into)`);
+} else {
+  run("npm", ["install", "--prefix", pluginPrefix("opencode-review"), "@opencode-ai/plugin"]);
 // opencode-dcp is a vendored npm tree (deps pinned in its package.json):
 // production-only install. --legacy-peer-deps works around an upstream
 // dev-tree conflict (dev @opencode/plugin wants @opentui/core >=0.5.14
 // while the package pins ^0.4.5); --omit=dev keeps the 0.4.x runtime the
 // TUI entry was built against. No version upgrades beyond the pins.
-run("npm", ["install", "--prefix", join(TARGET, "plugins", "opencode-dcp"), "--omit=dev", "--legacy-peer-deps", "--no-audit", "--no-fund"]);
-// Ported plugins (deps pinned in each package.json) — same production flags.
-// opencode-mem is NOT here: it installs into the config home, because the Bun
-// loader resolves bare imports up to TARGET/node_modules, not from the plugin
-// directory. A local tree there is invisible to the loader (and 864 MB of
-// duplicated dependencies).
-for (const name of ["opencode-github-release", "opencode-telemetry", "envsitter-guard", "opencode-log-sanitizer", "opencode-command-inject", "opencode-ralph-wiggum", "opencode-code-review"]) {
-  run("npm", ["install", "--prefix", join(TARGET, "plugins", name), "--omit=dev", "--legacy-peer-deps", "--no-audit", "--no-fund"]);
+  run("npm", ["install", "--prefix", pluginPrefix("opencode-dcp"), "--omit=dev", "--legacy-peer-deps", "--no-audit", "--no-fund"]);
+  // Ported plugins (deps pinned in each package.json) — same production flags.
+  // opencode-mem is NOT here: it installs into the config home, because the Bun
+  // loader resolves bare imports up to TARGET/node_modules, not from the plugin
+  // directory. A local tree there is invisible to the loader (and 864 MB of
+  // duplicated dependencies).
+  for (const name of ["opencode-github-release", "opencode-telemetry", "envsitter-guard", "opencode-log-sanitizer", "opencode-command-inject", "opencode-ralph-wiggum", "opencode-code-review"]) {
+    run("npm", ["install", "--prefix", pluginPrefix(name), "--omit=dev", "--legacy-peer-deps", "--no-audit", "--no-fund"]);
+  }
 }
 // Central fallback deps: the Bun loader walks bare imports up to
 // TARGET/node_modules, so the central copy must expose ./v2/promise
@@ -656,13 +706,14 @@ if (!DRY) {
 run("npm", ["install", "--prefix", TARGET, "--no-audit", "--no-fund"]);
 
 log("== 4/6 skills (global, agent=opencode) ==");
-const skillsRootReady = dirReady(SKILLS_DIR);
-if (!skillsRootReady) {
-  log(`  keep ${SKILLS_DIR} (a link or a file; the global skills are not installed)`);
+let skillsRootReady = dirReady(SKILLS_DIR);
+if (skillsRootReady) {
+  // ensureDir owns the creation: a path that cannot become a directory (a
+  // link, an ancestor that is a file) is kept, not fatal.
+  skillsRootReady = ensureDir(SKILLS_DIR);
 } else {
-  mkdirSync(SKILLS_DIR, { recursive: true });
-}
-// `npx` resolves `node` from PATH, so a machine-wide Node 20 makes the
+  log(`  keep ${SKILLS_DIR} (a link or a file; the global skills are not installed)`);
+}// `npx` resolves `node` from PATH, so a machine-wide Node 20 makes the
 // skills CLI (which needs Node >= 22.20 for fs/promises.glob) crash on EVERY
 // entry. Resolve a newer runtime and put its directory FIRST on PATH for the
 // duration of the install loop only.
@@ -755,7 +806,11 @@ if (has("python")) {
 const REA_PKG = "rea-agents@6.5.0";
 const REA_DIR = join(TARGET, "tools", "rea-agents");
 const REA_CLI = join(REA_DIR, "node_modules", "rea-agents", "scripts", "rea.mjs");
-run("npm", ["install", "--prefix", REA_DIR, "--no-audit", "--no-fund", REA_PKG]);
+if (toolsDirReady) {
+  run("npm", ["install", "--prefix", REA_DIR, "--no-audit", "--no-fund", REA_PKG]);
+} else {
+  log(`  skip ${REA_PKG} (${toolsDir} is not ours to write into)`);
+}
 if (DRY) {
   log("  [dry-run] would repoint rea MCP at this machine's newest Node >= 20.12 + the installed rea.mjs");
 } else if (!existsSync(REA_CLI)) {
@@ -844,6 +899,10 @@ const MCP_TOOL_INSTALLS = [
 for (const t of MCP_TOOL_INSTALLS) {
   const dir = join(TARGET, "tools", t.dir);
   const entryPath = join(dir, ...t.entry);
+  if (!toolsDirReady) {
+    log(`  skip ${t.pkg} (${toolsDir} is not ours to write into)`);
+    continue;
+  }
   log(`  install ${t.pkg} -> ${dir}`);
   run("npm", ["install", "--prefix", dir, "--no-audit", "--no-fund", t.pkg]);
   // node <entry> <args> for the JS MCPs; the platform binary itself for
@@ -889,6 +948,8 @@ const ANALYTICS_PY = join(ANALYTICS_BIN, process.platform === "win32" ? "python.
 const ANALYTICS_EXE = join(ANALYTICS_BIN, process.platform === "win32" ? "analytics-mcp.exe" : "analytics-mcp");
 if (!has("python")) {
   log("  skip: analytics-mcp (no python)");
+} else if (!toolsDirReady) {
+  log(`  skip: analytics-mcp (${toolsDir} is not ours to write into)`);
 } else {
   try {
     log(`  install ${ANALYTICS_PKG} -> ${ANALYTICS_DIR} (venv)`);

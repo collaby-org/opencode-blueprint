@@ -51,8 +51,12 @@ commit date of the same version.
   `.env.example`, `.env`, the slim config, the agent files and the commands. A
   shipped command that changed in a new release therefore lands on a fresh
   install only; delete the file to take the new one. `opencode.jsonc`,
-  `AGENTS.md`, `plugins/` and the vendored skills are versioned content and are
-  replaced on every install.
+  `AGENTS.md`, `plugins/`, `tools/mcp-env.mjs` and the vendored skills are
+  versioned content and are replaced on every install.
+- Every step of the installer is guarded: a step that fails, a path that is a
+  file where a directory is needed, a link, or a locked file is reported and
+  skipped. The install runs to the end instead of dying half way with a broken
+  config home.
 - The report, the pull request comment and the gate message name the real
   reason a review is incomplete: a plan that outran the agent budget reads
   differently from an agent that did not report.
