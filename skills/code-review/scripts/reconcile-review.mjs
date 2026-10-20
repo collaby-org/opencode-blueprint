@@ -139,13 +139,14 @@ function dedupe(findings) {
       continue;
     }
     const sources = [...(existing.sources || [existing.source]), finding.source];
-    const rank = SEVERITY_RANK[finding.severity] ?? 0;
-    const existingRank = SEVERITY_RANK[existing.severity] ?? 0;
-    // Severity wins first: a blocker and a nit can land in the same bucket,
-    // and keeping the nit because it was more confident would erase the
+    const rank = SEVERITY_RANK[finding.severity] ?? 99;
+    const existingRank = SEVERITY_RANK[existing.severity] ?? 99;
+    // SEVERITY_RANK is ascending severity: blocker 0, major 1, minor 2, nit 3.
+    // Severity wins first, so a blocker and a nit in the same bucket keep the
+    // blocker — keeping the nit because it was more confident would erase the
     // blocker and flip the verdict. Confidence only breaks a tie inside one
     // severity.
-    if (rank > existingRank) {
+    if (rank < existingRank) {
       kept.set(key, { ...finding, sources });
     } else if (rank === existingRank && finding.confidence > existing.confidence) {
       kept.set(key, { ...finding, sources });
