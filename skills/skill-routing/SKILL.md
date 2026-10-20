@@ -21,6 +21,7 @@ pinned versions in `tech_stack.md`; never apply latest idioms to legacy code.
 | Expo mobile | `expo-overview` first, then `expo-router`, `expo-native-ui`, `expo-data-fetching`, `expo-upgrade`, `eas-app-stores`, `eas-workflows`, `eas-update`, `animate-expo` (+ `expo` MCP) |
 | Tauri desktop | `tauri-v2` |
 | Diagrams / architecture | `diagram-design` (branded HTML/SVG diagrams), `excalidraw-diagram` |
+| Mind map / concept map | `mindmap` — a Markmap `.md` file in the project's docs home (`docs/mindmaps/<topic>.mindmap.md`), the interactive React `.jsx` only on request |
 | Video / motion output | `hyperframes` first (router), then its core set; `pr-to-video` for a PR, `product-launch-video` for a URL, `faceless-explainer` for text, `general-video` for anything else. Needs the `hyperframes` CLI (Node >= 22) |
 | Slow screen / perf issue | `perf-debug` |
 | New DB, console, API keys | `prisma-postgres-setup`, `prisma-postgres` |

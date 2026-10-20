@@ -426,10 +426,31 @@ const sameContent = (a, b) => {
   }
 };
 
+// Write a file atomically: a temporary file next to the destination, then a
+// rename over it. A truncate-then-write leaves a window in which the host
+// reads a half written file — and an empty opencode.jsonc takes every plugin,
+// MCP and agent with it.
+const writeAtomic = (from, to) => {
+  const tmp = `${to}.new-${process.pid}`;
+  try {
+    copyFileSync(from, tmp);
+    renameSync(tmp, to);
+    return true;
+  } catch (error) {
+    // The temporary file must not survive a failed copy: it is a full copy of
+    // the shipped file sitting in the directory the host watches.
+    try {
+      rmSync(tmp, { force: true });
+    } catch {
+      // Nothing to clean.
+    }
+    throw error;
+  }
+};
 // Copy a file, and never let one bad destination abort the install.
 const copyOrKeep = (from, to) => {
   try {
-    copyFileSync(from, to);
+    writeAtomic(from, to);
     return true;
   } catch {
     log(`  keep ${to} (cannot be written)`);
@@ -486,17 +507,25 @@ const cp = (src, dest) => {
   log(`  copy ${src} -> ${dest}`);
   if (DRY) return true;
   try {
+    if (existsAny(dest)) {
+      // A link is not ours to replace: the user may keep the config in a
+      // dotfiles repository, and replacing the link would destroy it.
+      try {
+        if (lstatSync(dest).isSymbolicLink()) {
+          log(`  keep ${dest} (a link; not ours to write through)`);
+          return false;
+        }
+      } catch {
+        // Fall through to the copy.
+      }
+    }
     if (isRegular(src)) {
-      // A file is replaced atomically: write a temporary file next to it and
-      // rename it over the destination. A remove-then-copy leaves a window
-      // where the host reads an empty file, and an empty opencode.jsonc takes
-      // every plugin, MCP and agent with it.
-      const tmp = `${dest}.new-${process.pid}`;
-      copyFileSync(src, tmp);
-      renameSync(tmp, dest);
-      // The destination must hold the shipped content. An empty file where the
-      // source has bytes means the copy was truncated; say so loudly instead
-      // of leaving the host without its config.
+      // A file is replaced atomically: the destination never exists in a
+      // half written state.
+      writeAtomic(src, dest);
+      // The destination must hold the shipped content. An empty file where
+      // the source has bytes means the copy was truncated; say so loudly
+      // instead of leaving the host without its config.
       try {
         if (statSync(dest).size === 0 && statSync(src).size > 0) {
           log(`  warn: ${dest} is empty after the copy — the host will start without it`);
@@ -506,19 +535,7 @@ const cp = (src, dest) => {
       }
       return true;
     }
-    if (existsAny(dest)) {
-      // A link is not ours to replace: copying through it would write outside
-      // the config home.
-      try {
-        if (lstatSync(dest).isSymbolicLink()) {
-          log(`  keep ${dest} (a link; not ours to write through)`);
-          return false;
-        }
-      } catch {
-        // Fall through to the copy.
-      }
-      rmSafe(dest);
-    }
+    rmSafe(dest);
     cpSync(src, dest, { recursive: true });
     return true;
   } catch {
@@ -531,18 +548,24 @@ cp(join(REPO, "AGENTS.md"), join(TARGET, "AGENTS.md"));
 // The MCP servers that need a credential fail at connect time when the value
 // is not in the process environment, and the host expands {env:NAME} from
 // its own environment when it starts. A value set after the host started is
+// The MCP servers that need a credential fail at connect time when the value
+// is not in the process environment, and the host expands {env:NAME} from
+// its own environment when it starts. A value set after the host started is
 // invisible until it is restarted, so say it here instead of leaving the
-// MCPs silently red.
+// MCPs silently red. These two are header credentials on remote servers:
+// the `.env` file feeds the wrapped local servers, not the host's own
+// expansion, so a value in `.env` never reaches them.
 const MCP_ENV = [
   ["GITHUB_TOKEN", "the github MCP (Authorization: Bearer {env:GITHUB_TOKEN})"],
   ["SENTRY_ACCESS_TOKEN", "the sentry MCP (Sentry-Bearer {env:SENTRY_ACCESS_TOKEN})"],
 ];
-for (const [name, why] of MCP_ENV) {
-  if (!process.env[name]) {
-    log(`  note: ${name} is not in this process environment, so ${why} cannot connect`);
-  }
+const missingMcpEnv = MCP_ENV.filter(([name]) => !process.env[name]);
+for (const [name, why] of missingMcpEnv) {
+  log(`  note: ${name} is not in this process environment, so ${why} cannot connect`);
 }
-log("  note: set a missing value in the environment that starts OpenCode, then restart the app; a value set after the start is not visible");
+if (missingMcpEnv.length > 0) {
+  log("  note: set it in the environment that starts OpenCode (a user or machine environment variable), then restart the app; a value set after the start is not visible, and the `.env` file does not reach a header credential");
+}
 // opencode-mem opens a local Turso database that only one process may own.
 // A second OpenCode server cannot open it, and the plugin reports itself as
 // failed. One server at a time.
@@ -805,7 +828,7 @@ for (const name of AUTOINVOKE_SKILLS) {
 // versioned files are replaced, a file the user added is kept, and a file the
 // user changed in a shipped one is replaced like the rest of the versioned
 // content (unlike .env.example above).
-const VENDORED_SKILLS = ["architect", "audit", "check", "code-review", "debug", "design-system", "develop", "document", "kodus-review", "living-docs", "opencode-github", "pr-agent", "repo-standards", "scope", "ship", "skill-routing", "sync", "test", "write-swift"];
+const VENDORED_SKILLS = ["architect", "audit", "check", "code-review", "debug", "design-system", "develop", "document", "kodus-review", "living-docs", "mindmap", "opencode-github", "pr-agent", "repo-standards", "scope", "ship", "skill-routing", "sync", "test", "write-swift"];
 for (const name of VENDORED_SKILLS) {
   const src = join(REPO, "skills", name);
   const dest = join(SKILLS_DIR, name);
@@ -1035,11 +1058,13 @@ log(`
   1. Auth:  kodus auth login   (or export KODUS_TEAM_KEY)
             gh auth login
   2. Env (the installer copies config/.env.example to .env in the opencode
-     config dir if missing — fill the placeholders in, never overwrite it):
-      CONTEXT7_API_KEY, SENTRY_ACCESS_TOKEN,
-      GOOGLE_APPLICATION_CREDENTIALS, GOOGLE_PROJECT_ID, DATABASE_URL,
-      MDB_MCP_CONNECTION_STRING, REDIS_URL, OPENCODE_ZEN_API_KEY,
-      KODUS_TEAM_KEY (or: kodus auth login)
+     config dir if missing - fill the placeholders in, never overwrite it).
+     GITHUB_TOKEN and SENTRY_ACCESS_TOKEN are header credentials on remote
+     servers: they belong in the environment that starts OpenCode, not in the
+     .env file, which only feeds the wrapped local servers:
+       CONTEXT7_API_KEY, GOOGLE_APPLICATION_CREDENTIALS, GOOGLE_PROJECT_ID,
+       DATABASE_URL, MDB_MCP_CONNECTION_STRING, REDIS_URL, OPENCODE_ZEN_API_KEY,
+       KODUS_TEAM_KEY (or: kodus auth login)
   3. Cluster: configure kubeconfig for the kubernetes MCP.
   4. Restart opencode (config is loaded once at startup).
   5. Per repo: run /pr-agent-setup once (adds PR-Agent Action; set OPENAI_KEY secret).

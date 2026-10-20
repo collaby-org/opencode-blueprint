@@ -1,7 +1,7 @@
 # OpenCode Blueprint
 
 > One command. A complete, opinionated, production-grade [opencode](https://opencode.ai)
-> environment - **22 MCPs, 11 plugins, 122 skills, a global agent workflow,**
+> environment - **22 MCPs, 11 plugins, 123 skills, a global agent workflow,**
 > and **Kodus + PR-Agent** review loops. Built for teams shipping
 > Apple-clean, award-worthy software.
 
@@ -106,6 +106,7 @@ finished answer — researched, de-duplicated, and verified working together:
 | Workflow | `new-feature`, `code-structure`, `evidence-driven-testing`, `before-and-after`, `unslop`, `perf-debug` |
 | Local review gate | `code-review` (cross model, chunked, confidence gated; `code-reviewer` remains the review input skill) |
 | Diagrams / architecture | `diagram-design` (45 diagram types, branded HTML/SVG), `excalidraw-diagram` |
+| Mind maps | `mindmap` (Markmap `.md` in the docs home, interactive React `.jsx` on request) |
 | Video / motion output | `hyperframes` (router) + `hyperframes-core`, `hyperframes-animation`, `hyperframes-audio`, `hyperframes-cli`, `hyperframes-creative`, `hyperframes-keyframes`, `hyperframes-registry`, `hyperframes-studio`, `media-use`, `general-video`, `product-launch-video`, `faceless-explainer`, `pr-to-video` |
 | Agent process / authoring | `writing-for-agents`, `domain-modeling`, `research`, `handoff`, `retro`, `grilling`, `grill-me`, `grill-with-docs`, `ask-matt` (skill router), `pr` (PR body) |
 | API design / contract | `api-designer`, `graphql-architect` |
@@ -145,7 +146,7 @@ The installer: checks prerequisites → backs up your existing config →
 copies `opencode.jsonc` + `AGENTS.md` + commands + `.env.example` starter →
 copies all 10 local plugin trees and installs each one's deps (plus the
 central `@opencode-ai/plugin` fallback the loader resolves against) →
-installs all 122 skills globally (registry via `skills add`, 17 workflow
+installs all 123 skills globally (registry via `skills add`, 17 workflow
 skills vendored from `skills/`) → installs the Kodus CLI
 and `redis-mcp-server` → installs the pinned `rea-agents`, `prisma`,
 `@modelcontextprotocol/server-postgres`, `mongodb-mcp-server`,

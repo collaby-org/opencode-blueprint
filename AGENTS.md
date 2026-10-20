@@ -105,6 +105,16 @@ Load the `skill-routing` skill and use its table. Load only the skills that
 match the target. Match the repo's ACTUAL pinned versions in `tech_stack.md`;
 never apply latest idioms to legacy code (adapt down or ask).
 
+## Diagrams and mind maps (always)
+
+A diagram or a mind map is a file in the repository, not a chat answer. Use the
+`diagram-design` skill for a diagram and the `mindmap` skill for a concept map:
+a Markmap `.md` file in the project's resolved docs home
+(`docs/mindmaps/<topic>.mindmap.md`), and the interactive React `.jsx` only when
+the user asks for it. Produce one when the structure is the point — a new
+subsystem, a plan, a research summary, a handover — and link it from the
+document it explains. Never answer a "map this out" request with prose.
+
 ## UI rules (always)
 
 Icons Lucide-only; components shadcn-first; motion invisible-or-not;

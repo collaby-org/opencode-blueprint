@@ -9,6 +9,42 @@ Version 1.0.0 was published to npm but never got a git tag, so it has no tag
 range. The npm publish timestamps are UTC and can sit a day earlier than the
 commit date of the same version.
 
+## [1.4.2] - 2026-10-20
+
+### Added
+
+- The `mindmap` skill: a mind map is a file in the repository, not a chat
+  answer. It writes a Markmap `.md` into the project's resolved docs home
+  (`docs/mindmaps/<topic>.mindmap.md`) and an interactive React `.jsx` next to
+  it when one is asked for. Adapted from
+  [0x-man/mindmap-skill](https://github.com/0x-man/mindmap-skill) (MIT, vendored
+  with its license); the Claude-only Knowledge Atlas mode is documented as
+  unavailable. `AGENTS.md`, the routing table, the README and the
+  `repo-standards` skill say when a map belongs in a project.
+
+### Fixed
+
+- The installer replaces a file atomically: it writes a temporary file next to
+  the destination and renames it over it. The remove-then-copy left a window
+  in which the host could read an empty `opencode.jsonc` — and an empty config
+  takes every plugin, MCP and agent with it, which is what left the host
+  without `oh-my-opencode-slim` and without the MCPs. The copy now also says so
+  when the destination ends up empty, cleans up its temporary file when the
+  copy fails, and never replaces a link the user put in place.
+
+### Changed
+
+- `AGENTS.md`: a worktree lives on the same drive as its repository
+  (`D:\Work\worktrees\<repo>\<branch>` for a repository on `D:`), never on the
+  system drive unless the repository itself is there, and never inside the
+  repository's own location.
+- `AGENTS.md`: every change lands through a new pull request. The branch is
+  pushed — a pull request that only exists on this machine is not done — and
+  merging stays the human's decision.
+- The installer names the credentials the host needs in its own environment
+  (`GITHUB_TOKEN`, `SENTRY_ACCESS_TOKEN`) and says that the `.env` file feeds
+  the wrapped local servers, not a header credential on a remote server.
+
 ## [1.4.1] - 2026-10-20
 
 ### Added

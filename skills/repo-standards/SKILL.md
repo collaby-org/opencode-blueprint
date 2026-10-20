@@ -97,6 +97,15 @@ A `TODO:` in `CODEOWNERS` or `SECURITY.md` blocks merge until a person fills it.
 After `--apply`, read the generated files and adapt any detected command or
 name the repository does not actually use.
 
+## Diagrams and mind maps
+
+The baseline is where a project's structure lives: the `docs/` home holds the
+changelog, the living docs and — when the structure is the point — the mind
+maps. The `mindmap` skill writes a map into that home as
+`docs/mindmaps/<topic>.mindmap.md`; the interactive React file is written next
+to it only when it is asked for. A project that documents its own structure
+keeps the map in the repository, not in a chat.
+
 ## Validation
 
 Agents run `--check` at task start and report the exact output. CI can run the
