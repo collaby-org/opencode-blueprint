@@ -9,6 +9,20 @@ Version 1.0.0 was published to npm but never got a git tag, so it has no tag
 range. The npm publish timestamps are UTC and can sit a day earlier than the
 commit date of the same version.
 
+## [1.3.5] - 2026-10-20
+
+### Fixed
+
+- The gate reads the session directory from `session.location.directory` or
+  `session.directory`, and extracts the session id from every shape the hook
+  event can carry, so a worktree or a second project is checked against its
+  own artifact instead of the plugin's load directory.
+- `reviewCoversHead` no longer defaults to the server working directory: the
+  root is required, so the gate can never consult the wrong checkout.
+- The status tool no longer reports `via: "head"` when both heads are null.
+- On Windows, a UNC or over-long checkout path is retried with the extended
+  path prefix instead of being reported as "not a git repository".
+
 ## [1.3.4] - 2026-10-20
 
 ### Fixed
@@ -44,7 +58,7 @@ commit date of the same version.
 
 ## [1.3.1] - 2026-10-20
 
-Review fixes for 1.3.0. The branch lands as 1.3.4.
+Review fixes for 1.3.0. The branch lands as 1.3.5.
 
 ### Fixed
 

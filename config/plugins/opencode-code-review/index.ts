@@ -51,17 +51,28 @@ function reviewConfig(root: string) {
   };
 }
 
+// Windows rejects a UNC path as a process working directory and paths past
+// MAX_PATH need the extended prefix. Try the plain path first, then the
+// extended form, so a valid checkout is never reported as "not a repository".
+function gitCwd(root: string) {
+  if (root.startsWith("\\\\") && !root.startsWith("\\\\?\\")) return "\\\\?\\" + root;
+  return root;
+}
+
 function git(args: string[], root: string) {
-  try {
-    return execFileSync("git", args, {
-      cwd: root,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-      maxBuffer: 8 * 1024 * 1024,
-    }).trim();
-  } catch {
-    return null;
+  for (const cwd of [root, gitCwd(root)]) {
+    try {
+      return execFileSync("git", args, {
+        cwd,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+        maxBuffer: 8 * 1024 * 1024,
+      }).trim();
+    } catch {
+      // Try the extended form, then give up.
+    }
   }
+  return null;
 }
 
 function gitDir(root: string) {
@@ -83,13 +94,37 @@ function readState(root: string) {
 // A review made on the working tree records the HEAD it sat on top of. Once
 // that tree is committed, HEAD moves and the review would look stale although
 // it covered exactly this content. Accept it when the reviewed head is HEAD^.
-// Exported so the rule can be probed without driving the whole hook.
-export function reviewCoversHead(state, head, root = process.cwd()) {
+// The root is required: the gate must never consult the server working
+// directory. Exported so the rule can be probed without driving the whole hook.
+export function reviewCoversHead(state, head, root: string) {
   if (!state || !head || !state.head) return false;
   if (state.head === head) return true;
   if (state.mode !== "uncommitted") return false;
   const parent = git(["rev-parse", "HEAD^"], root);
   return Boolean(parent && parent === state.head);
+}
+
+// The hook event is not guaranteed to carry the session id at the top level.
+// Read the common shapes before giving up: without it the gate falls back to
+// the plugin location and can evaluate a checkout it does not protect.
+function readSessionID(ev: Record<string, unknown>): string | undefined {
+  const data = ev.data as Record<string, unknown> | undefined;
+  const properties = ev.properties as Record<string, unknown> | undefined;
+  const candidates = [
+    ev.sessionID,
+    ev.sessionId,
+    ev.session_id,
+    data?.sessionID,
+    data?.sessionId,
+    data?.session_id,
+    properties?.sessionID,
+    properties?.sessionId,
+    properties?.session_id,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate) return candidate;
+  }
+  return undefined;
 }
 
 function describe(state) {
@@ -592,7 +627,9 @@ export default define({
     const context = ctx as unknown as {
       location?: { directory?: string };
       session?: {
-        get: (input: { sessionID: string }) => Promise<{ location?: { directory?: string } } | undefined>;
+        get: (input: { sessionID: string }) => Promise<
+          { directory?: string; location?: { directory?: string } } | undefined
+        >;
       };
     };
     const pluginRoot = context.location?.directory || null;
@@ -601,7 +638,9 @@ export default define({
       if (sessionID && context.session?.get) {
         try {
           const session = await context.session.get({ sessionID });
-          const directory = session?.location?.directory;
+          // The session directory lives under `location` on the V2 schema and
+          // directly on the session in some SDK builds; accept both.
+          const directory = session?.location?.directory || session?.directory;
           if (directory) return directory;
         } catch {
           // Fall through to the plugin location; a failed lookup must not
@@ -645,7 +684,7 @@ export default define({
         input: { type: "object", properties: {}, additionalProperties: false },
         async execute(_input, toolContext) {
           const root = await resolveRoot(
-            (toolContext as { sessionID?: string } | undefined)?.sessionID,
+            readSessionID((toolContext ?? {}) as Record<string, unknown>),
           );
           if (!root) {
             return {
@@ -671,11 +710,12 @@ export default define({
                 head,
                 reviewedHead: state.head,
                 fresh: reviewCoversHead(state, head, root),
-                via: state.head === head
-                  ? "head"
-                  : reviewCoversHead(state, head, root)
-                    ? "commit"
-                    : "none",
+                via:
+                  state.head && state.head === head
+                    ? "head"
+                    : reviewCoversHead(state, head, root)
+                      ? "commit"
+                      : "none",
                 complete: state.complete !== false,
                 verdict: state.verdict,
                 counts: state.counts,
@@ -710,7 +750,7 @@ export default define({
       const verdict = prCreateVerdict(command);
       if (!verdict.gated) return;
 
-      const root = await resolveRoot(typeof ev.sessionID === "string" ? ev.sessionID : undefined);
+      const root = await resolveRoot(readSessionID(ev));
       if (!root) {
         throw new Error(
           "Blocked: cannot resolve the project directory for this checkout. " +
