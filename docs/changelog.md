@@ -20,6 +20,25 @@ commit date of the same version.
   one OpenCode server at a time, or the second one cannot open it and the
   plugin reports itself as failed.
 
+### Fixed
+
+- The installer replaces a file atomically: it writes a temporary file next to
+  the destination and renames it over it. The remove-then-copy left a window
+  in which the host could read an empty `opencode.jsonc` — and an empty config
+  takes every plugin, MCP and agent with it, which is what left the host
+  without `oh-my-opencode-slim` and without the MCPs. The copy now also says so
+  when the destination ends up empty.
+
+### Changed
+
+- `AGENTS.md`: a worktree lives on the same drive as its repository
+  (`D:\Work\worktrees\<repo>\<branch>` for a repository on `D:`), never on the
+  system drive unless the repository itself is there, and never inside the
+  repository's own location.
+- `AGENTS.md`: every change lands through a new pull request. The branch is
+  pushed — a pull request that only exists on this machine is not done — and
+  merging stays the human's decision.
+
 ## [1.4.0] - 2026-10-20
 
 ### Added

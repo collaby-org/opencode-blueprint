@@ -4,7 +4,7 @@
 //   npx opencode-blueprint            # full install
 //   npx opencode-blueprint --dry-run  # print what would happen
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, copyFileSync, cpSync, rmSync, readFileSync, writeFileSync, readdirSync, lstatSync } from "node:fs";
+import { existsSync, mkdirSync, copyFileSync, cpSync, rmSync, readFileSync, writeFileSync, readdirSync, lstatSync, renameSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, dirname, delimiter } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -484,25 +484,46 @@ const mergeDir = (src, dest) => {
 };
 const cp = (src, dest) => {
   log(`  copy ${src} -> ${dest}`);
-  if (!DRY) {
+  if (DRY) return true;
+  try {
+    if (isRegular(src)) {
+      // A file is replaced atomically: write a temporary file next to it and
+      // rename it over the destination. A remove-then-copy leaves a window
+      // where the host reads an empty file, and an empty opencode.jsonc takes
+      // every plugin, MCP and agent with it.
+      const tmp = `${dest}.new-${process.pid}`;
+      copyFileSync(src, tmp);
+      renameSync(tmp, dest);
+      // The destination must hold the shipped content. An empty file where the
+      // source has bytes means the copy was truncated; say so loudly instead
+      // of leaving the host without its config.
+      try {
+        if (statSync(dest).size === 0 && statSync(src).size > 0) {
+          log(`  warn: ${dest} is empty after the copy — the host will start without it`);
+        }
+      } catch {
+        // Nothing to compare.
+      }
+      return true;
+    }
     if (existsAny(dest)) {
       // A link is not ours to replace: copying through it would write outside
       // the config home.
       try {
         if (lstatSync(dest).isSymbolicLink()) {
-          log(`  keep ${dest} (a link; not ours to replace)`);
-          return;
+          log(`  keep ${dest} (a link; not ours to write through)`);
+          return false;
         }
       } catch {
         // Fall through to the copy.
       }
       rmSafe(dest);
     }
-    try {
-      cpSync(src, dest, { recursive: true });
-    } catch {
-      log(`  keep ${dest} (cannot be written)`);
-    }
+    cpSync(src, dest, { recursive: true });
+    return true;
+  } catch {
+    log(`  keep ${dest} (cannot be written)`);
+    return false;
   }
 };
 cp(join(REPO, "config", "opencode.jsonc"), join(TARGET, "opencode.jsonc"));
