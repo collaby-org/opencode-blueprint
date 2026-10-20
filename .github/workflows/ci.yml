@@ -50,3 +50,8 @@ jobs:
 
       - name: Disk hygiene report
         run: node bin/clean.mjs
+
+      - name: README stats
+        # The numbers in the README are counted from the repository: a
+        # README that lies about its own contents is worse than no README.
+        run: node bin/readme-stats.mjs --check

@@ -38,6 +38,19 @@ Conventional Commits: `<type>(<scope>): <subject>`.
   monorepo), newest first, one section per version. The changelog entry and
   the version bump ride in the same commit as the change they describe.
 
+## Reverse engineering
+
+- Every artifact of a reverse engineering session lives in the project being
+  worked on, under `reversed-engineered/<name>/` — for example
+  `reversed-engineered/MEXC/` with the extracted files and folders inside it.
+- Nothing lands in a temp directory, a scratch path, or loose in the repository
+  root. The session's output and the project stay together, so the next person
+  finds the work where the code is.
+- One folder per target: `reversed-engineered/<product-or-binary>/`. The
+  extracted tree, the notes and the scripts stay inside it.
+- The REA MCP writes there too. Point it at the project's `reversed-engineered/`
+  before the first extraction, not after.
+
 ## Secrets
 
 - A secret value never lands in a file: not in the repo, not in a scratch

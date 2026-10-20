@@ -13,14 +13,41 @@ the last releases delivered.
   sources `cathrynlavery/diagram-design`, `heygen-com/hyperframes` and
   `mattpocock/skills`, and the skill count corrected from 94 to 119 in the
   `package.json` description. Shipped in 1.2.7.
-- [ ] Release the local code review gate and the versioned docs flow as 1.4.0:
+- [x] Release the local code review gate and the versioned docs flow as 1.4.0:
   the `code-review` skill, the `opencode-code-review` plugin, the two GitHub
   workflows, the `AGENTS.md` docs/version rules, the `repo-standards`
   scaffold, the slim `AGENTS.md` and the skill updates are in the working
-  tree. Done when the tag exists, a fresh install loads the plugin
-  (`/code-review` present, `gh pr create` gated), the agent file lands in
-  `~/.config/opencode/agents/` and the docs rule is enforced on the next
-  project.
+  tree. Shipped in 1.4.0: PR #4 merged, the tag exists, a fresh install
+  loads the plugin (`/code-review` present, `gh pr create` gated), the agent
+  file lands in `~/.config/opencode/agents/` and the docs rule is enforced on
+  the next project.
+- [x] Report the MCP credentials the host is missing (1.4.3) and replace the
+  config atomically (1.4.3), so an install can no longer leave the host with
+  an empty `opencode.jsonc` and no plugins, MCPs or agents.
+- [x] Add the `mindmap` skill and say when a map belongs in a project
+  (1.4.3): a Markmap file in the resolved docs home, the interactive React
+  file only on request.
+- [x] State the worktree and pull request rules (1.4.3): a worktree on the
+  repository's own drive, every change through a new pull request with the
+  branch pushed, merging the human's decision.
+- [x] Give the orchestrator a dispatch contract (1.4.3): work units, one
+  owner per path, one owner per shared artifact, and a scope manifest that is
+  checked before the dispatch and against the result afterwards.
+- [ ] Authenticate the hosted MCP servers: `opencode mcp auth cloudflare`,
+  `expo`, `figma`, `notion`, `stripe`, `supabase`, and set
+  `SENTRY_ACCESS_TOKEN` for sentry. Done when `opencode mcp list` shows every
+  server connected and a restarted host still has the token in its process
+  environment.
+- [ ] Rotate the Kodus team key. It was committed on 2026-10-03 and is in the
+  history; the value is out of the file and the fingerprint is ignored by the
+  secret scan, but the credential itself is leaked. Also rotate the npm token.
+- [ ] Let `bin/clean.mjs` descend one level into `%TEMP%\opencode`, so a stale
+  scratch directory is reclaimed on its own age instead of the age of the
+  whole temp root.
+- [ ] Apply the repo standards and the resolved docs home to the projects
+  outside this repository, starting with the Laravel project whose linked
+  documentation home was never updated. Done when each project passes
+  `standards.mjs --check` and its pull requests update the resolved home.
 - [ ] Confirm the standards flow on a repository outside this one.
   `standards.mjs --check` must pass on a project that already carries the
   baseline, and a second `--apply` must change nothing. Done when a project

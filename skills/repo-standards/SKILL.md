@@ -97,6 +97,24 @@ A `TODO:` in `CODEOWNERS` or `SECURITY.md` blocks merge until a person fills it.
 After `--apply`, read the generated files and adapt any detected command or
 name the repository does not actually use.
 
+## Reverse engineering
+
+The baseline is also where reverse engineering output belongs: a project that
+extracts a binary or an application keeps everything under
+`reversed-engineered/<name>/` — the extracted files, the notes and the scripts
+in one folder per target, inside the project, never in a temp directory and
+never loose in the repository root. Point the REA MCP at that folder before
+the first extraction.
+
+## Diagrams and mind maps
+
+The baseline is where a project's structure lives: the `docs/` home holds the
+changelog, the living docs and — when the structure is the point — the mind
+maps. The `mindmap` skill writes a map into that home as
+`docs/mindmaps/<topic>.mindmap.md`; the interactive React file is written next
+to it only when it is asked for. A project that documents its own structure
+keeps the map in the repository, not in a chat.
+
 ## Validation
 
 Agents run `--check` at task start and report the exact output. CI can run the

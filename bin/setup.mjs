@@ -4,7 +4,7 @@
 //   npx opencode-blueprint            # full install
 //   npx opencode-blueprint --dry-run  # print what would happen
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, copyFileSync, cpSync, rmSync, readFileSync, writeFileSync, readdirSync, lstatSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, copyFileSync, cpSync, rmSync, readFileSync, writeFileSync, readdirSync, lstatSync, renameSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, dirname, delimiter } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -207,7 +207,9 @@ const replaceMcpCommand = (cfgPath, key, nextArgs) => {
   if (!Array.isArray(cmd) || JSON.stringify(cmd) !== JSON.stringify(nextArgs)) {
     throw new Error(`refusing to write ${cfgPath}: "${key}.command" would be ${JSON.stringify(cmd)}, expected ${JSON.stringify(nextArgs)}`);
   }
-  writeFileSync(cfgPath, next);
+  if (!writeTextAtomic(cfgPath, next)) {
+    throw new Error(`kept ${cfgPath} (not a regular file; the MCP entry was not repointed)`);
+  }
   return cmd;
 };
 
@@ -298,7 +300,7 @@ const patchAutoinvoke = (file) => {
   if (patched === text) return "already-patched";
   if (!DRY) {
     try {
-      writeFileSync(file, patched);
+      writeTextAtomic(file, patched);
     } catch {
       // A read-only or locked skill file keeps its content: the mirror is
       // cosmetic, never worth an aborted install.
@@ -426,10 +428,192 @@ const sameContent = (a, b) => {
   }
 };
 
+// A staging directory the host does not scan: the config home's plugins
+// directory is auto-loaded, so a staging directory left there would be read as
+// a plugin. The name is unpredictable, each directory carries the pid that
+// owns it, and stale entries are swept by age, never by prefix — a second
+// install running now must not lose its staging area.
+const STAGING_ROOT = join(TARGET, ".install-staging");
+const STALE_STAGE_MS = 10 * 60 * 1000;
+const sleepMs = (ms) => {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+};
+const pidAlive = (pid) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error && error.code === "EPERM";
+  }
+};
+const stageDir = (dest) => {
+  mkdirSync(STAGING_ROOT, { recursive: true });
+  try {
+    for (const entry of readdirSync(STAGING_ROOT, { withFileTypes: true })) {
+      if (!entry.isDirectory() || !entry.name.startsWith("stage-")) continue;
+      // Each entry is judged on its own: one unreadable owner must not stop the
+      // sweep of the rest.
+      try {
+        const dir = join(STAGING_ROOT, entry.name);
+        const ownerFile = join(dir, "owner.pid");
+        const owner = Number(readFileSync(ownerFile, "utf8").trim());
+        const age = Date.now() - statSync(dir).mtimeMs;
+        const live = Number.isFinite(owner) && owner > 0 && pidAlive(owner);
+        if (live || age < STALE_STAGE_MS) continue;
+        rmSync(dir, { recursive: true, force: true });
+      } catch {
+        // An entry that cannot be read is left alone.
+      }
+    }
+  } catch {
+    // Nothing to sweep.
+  }
+  const dir = mkdtempSync(join(STAGING_ROOT, "stage-"));
+  try {
+    writeFileSync(join(dir, "owner.pid"), String(process.pid));
+  } catch {
+    // The owner marker is an optimisation for the sweep, not a requirement.
+  }
+  return dir;
+};
+// Put a staged file in place of the destination with one rename. Renaming over
+// an existing file is atomic on POSIX and on Windows (MoveFileExW with
+// REPLACE_EXISTING), so a reader sees either the old file or the new one.
+//
+// When another process holds the destination open, Windows refuses the rename.
+// The destination is then NEVER renamed away: a reader would see the file
+// missing, and a missing opencode.jsonc takes every plugin, MCP and agent with
+// it. The install retries briefly and, if the file stays busy, leaves the old
+// one in place and says so. A stale config beats an absent one.
+const replaceFile = (staged, dest) => {
+  for (let attempt = 0; attempt < 6; attempt++) {
+    try {
+      renameSync(staged, dest);
+      return true;
+    } catch (error) {
+      const code = error && error.code;
+      if (code !== "EPERM" && code !== "EBUSY" && code !== "EACCES") throw error;
+      sleepMs(150);
+    }
+  }
+  log(`  keep ${dest} (busy — the old file is still in place)`);
+  return false;
+};
+// A destination the user put in place is not ours to replace: a link would be
+// destroyed, and a directory where a file belongs would be deleted. The copy
+// keeps it and says so.
+const guardFileDest = (dest) => {
+  if (!existsAny(dest)) return true;
+  try {
+    const stat = lstatSync(dest);
+    if (stat.isSymbolicLink()) {
+      log(`  keep ${dest} (a link; not ours to write through)`);
+      return false;
+    }
+    if (!stat.isFile()) {
+      log(`  keep ${dest} (not a regular file; not ours to replace)`);
+      return false;
+    }
+  } catch {
+    // Fall through to the copy.
+  }
+  return true;
+};
+// The same for a tree: a link is kept, a directory is the normal case.
+const guardTreeDest = (dest) => {
+  if (!existsAny(dest)) return true;
+  try {
+    if (lstatSync(dest).isSymbolicLink()) {
+      log(`  keep ${dest} (a link; not ours to write through)`);
+      return false;
+    }
+  } catch {
+    // Fall through to the copy.
+  }
+  return true;
+};
+// Copy a staged tree over the destination, file by file. The destination
+// stays present the whole time, so a reader never sees it missing — and
+// renaming a directory over another is refused by Windows anyway. A file that
+// upstream removed stays behind: the destination is a superset of the shipped
+// tree, which is also what keeps the user's own files.
+const mergeTree = (src, dest) => {
+  mkdirSync(dest, { recursive: true });
+  for (const entry of readdirSync(src, { withFileTypes: true })) {
+    const from = join(src, entry.name);
+    const to = join(dest, entry.name);
+    if (entry.isDirectory()) {
+      mergeTree(from, to);
+      continue;
+    }
+    if (!entry.isFile()) continue;
+    if (existsAny(to) && !isRegular(to)) continue;
+    copyFileSync(from, to);
+  }
+};
+// Write a file atomically: stage it, then swap it in. A truncate-then-write
+// leaves a window in which the host reads a half written file — and an empty
+// opencode.jsonc takes every plugin, MCP and agent with it.
+const writeAtomic = (from, to) => {
+  if (!guardFileDest(to)) return false;
+  const stage = stageDir(to);
+  const tmp = join(stage, "file");
+  try {
+    copyFileSync(from, tmp);
+    // The copy must hold the whole source, and the source must not be empty.
+    const srcSize = statSync(from).size;
+    const tmpSize = statSync(tmp).size;
+    if (srcSize !== tmpSize) {
+      log(`  warn: ${to} was staged with ${tmpSize} of ${srcSize} bytes`);
+    }
+    if (srcSize === 0) {
+      log(`  warn: ${from} is empty — ${to} would leave the host without it`);
+    }
+    return replaceFile(tmp, to);
+  } finally {
+    rmSync(stage, { recursive: true, force: true });
+  }
+};
+// Copy a tree: stage the whole tree, then copy it over the destination file by
+// file. A failed copy leaves the destination in place.
+const copyTreeAtomic = (from, to) => {
+  if (!guardTreeDest(to)) return false;
+  const stage = stageDir(to);
+  const staged = join(stage, "tree");
+  try {
+    // Probe the source first: a permission error becomes a catchable
+    // exception here instead of aborting the process inside the copy.
+    readdirSync(from);
+    cpSync(from, staged, { recursive: true });
+    mergeTree(staged, to);
+    return true;
+  } catch (error) {
+    log(`  keep ${to} (cannot be written: ${error && error.code ? error.code : "error"})`);
+    return false;
+  } finally {
+    rmSync(stage, { recursive: true, force: true });
+  }
+};
+// Write text into a file atomically: stage it in the staging root (outside the
+// directories the host scans) and swap it in. A truncate-write leaves a window
+// in which the host reads an empty file — and an empty opencode.jsonc takes
+// every plugin, MCP and agent with it. This is the path the MCP repoint takes,
+// so it matters as much as the copy.
+const writeTextAtomic = (to, text) => {
+  if (!guardFileDest(to)) return false;
+  const stage = stageDir(to);
+  const tmp = join(stage, "file");
+  try {
+    writeFileSync(tmp, text);
+    return replaceFile(tmp, to);
+  } finally {
+    rmSync(stage, { recursive: true, force: true });
+  }
+};
 // Copy a file, and never let one bad destination abort the install.
 const copyOrKeep = (from, to) => {
   try {
-    copyFileSync(from, to);
+    writeAtomic(from, to);
     return true;
   } catch {
     log(`  keep ${to} (cannot be written)`);
@@ -465,7 +649,16 @@ const mergeDir = (src, dest) => {
     log(`  keep ${dest} (cannot create the directory)`);
     return;
   }
-  for (const entry of readdirSync(src, { withFileTypes: true })) {
+  let entries;
+  try {
+    entries = readdirSync(src, { withFileTypes: true });
+  } catch (error) {
+    // A source the process may not read is reported and skipped: the install
+    // must not die half way through.
+    log(`  keep ${dest} (cannot read ${src}: ${error && error.code ? error.code : "error"})`);
+    return;
+  }
+  for (const entry of entries) {
     const from = join(src, entry.name);
     const to = join(dest, entry.name);
     if (entry.isDirectory()) {
@@ -484,29 +677,59 @@ const mergeDir = (src, dest) => {
 };
 const cp = (src, dest) => {
   log(`  copy ${src} -> ${dest}`);
-  if (!DRY) {
+  if (DRY) return true;
+  try {
     if (existsAny(dest)) {
-      // A link is not ours to replace: copying through it would write outside
-      // the config home.
+      // A link is not ours to replace: the user may keep the config in a
+      // dotfiles repository, and replacing the link would destroy it.
       try {
         if (lstatSync(dest).isSymbolicLink()) {
-          log(`  keep ${dest} (a link; not ours to replace)`);
-          return;
+          log(`  keep ${dest} (a link; not ours to write through)`);
+          return false;
         }
       } catch {
         // Fall through to the copy.
       }
-      rmSafe(dest);
     }
-    try {
-      cpSync(src, dest, { recursive: true });
-    } catch {
-      log(`  keep ${dest} (cannot be written)`);
+    if (isRegular(src)) {
+      // A file is replaced atomically: the destination never exists in a
+      // half written state.
+      writeAtomic(src, dest);
+      return true;
     }
+    // A tree is staged first and swapped in afterwards: a failed copy leaves
+    // the destination in place instead of deleting it.
+    copyTreeAtomic(src, dest);
+    return true;
+  } catch {
+    log(`  keep ${dest} (cannot be written)`);
+    return false;
   }
 };
 cp(join(REPO, "config", "opencode.jsonc"), join(TARGET, "opencode.jsonc"));
 cp(join(REPO, "AGENTS.md"), join(TARGET, "AGENTS.md"));
+// The MCP servers that need a credential fail at connect time when the value
+// is not in the process environment, and the host expands {env:NAME} from
+// its own environment when it starts. A value set after the host started is
+// invisible until it is restarted, so say it here instead of leaving the
+// MCPs silently red. These two are header credentials on remote servers:
+// the `.env` file feeds the wrapped local servers, not the host's own
+// expansion, so a value in `.env` never reaches them.
+const MCP_ENV = [
+  ["GITHUB_TOKEN", "the github MCP (Authorization: Bearer {env:GITHUB_TOKEN})"],
+  ["SENTRY_ACCESS_TOKEN", "the sentry MCP (Sentry-Bearer {env:SENTRY_ACCESS_TOKEN})"],
+];
+const missingMcpEnv = MCP_ENV.filter(([name]) => !process.env[name]);
+for (const [name, why] of missingMcpEnv) {
+  log(`  note: ${name} is not in this process environment, so ${why} cannot connect`);
+}
+if (missingMcpEnv.length > 0) {
+  log("  note: set it in the environment that starts OpenCode (a user or machine environment variable), then restart the app; a value set after the start is not visible, and the `.env` file does not reach a header credential");
+}
+// opencode-mem opens a local Turso database that only one process may own.
+// A second OpenCode server cannot open it, and the plugin reports itself as
+// failed. One server at a time.
+log("  note: opencode-mem holds a single-writer database; run one OpenCode server at a time");
 // The commands directory holds the shipped commands and the ones the user
 // wrote. Copy the shipped ones that are missing, keep a tuned file with a
 // backup, and never remove a file this installer did not put there.
@@ -627,6 +850,12 @@ if (!toolsDirReady) log(`  keep ${toolsDir} (a link or a file; not ours to write
 else {
   if (!DRY) ensureDir(toolsDir);
   cp(join(REPO, "config", "tools", "mcp-env.mjs"), join(toolsDir, "mcp-env.mjs"));
+// The tools every project needs, wherever the work happens: the parallel
+// dispatch check and the disk hygiene report. They live in the config home
+// because `bin/` only exists inside the blueprint repository, and an agent on
+// another machine must not hit a missing file.
+cp(join(REPO, "bin", "agents-scope.mjs"), join(toolsDir, "agents-scope.mjs"));
+cp(join(REPO, "bin", "clean.mjs"), join(toolsDir, "clean.mjs"));
 }
 // Copy .env.example as a starter template only — never overwrite an existing
 // (possibly filled-in) .env.example in TARGET.
@@ -690,6 +919,7 @@ if (!pluginsDirReady) {
 // back to a stale central copy and fail with "Cannot find package".
 const centralPkgPath = join(TARGET, "package.json");
 let centralPkg = {};
+let centralPkgWritable = true;
 const centralPkgText = readTextSafe(centralPkgPath);
 if (centralPkgText !== null) {
   try {
@@ -699,20 +929,25 @@ if (centralPkgText !== null) {
     centralPkg = {};
   }
 } else if (existsAny(centralPkgPath)) {
+  // The file is a link or a directory: it is not ours to replace, and the
+  // dependencies are not merged into something we do not own.
   log(`  keep ${centralPkgPath} (not a regular file; the dependencies are not merged)`);
+  centralPkgWritable = false;
 }
-centralPkg.dependencies = {
-  ...(centralPkg.dependencies || {}),
-  "@opencode-ai/plugin": "^1.19.1",
-  "opencode-mem": "2.32.0",
-};
-if (!DRY) {
-  try {
-    writeFileSync(centralPkgPath, JSON.stringify(centralPkg, null, 2) + "\n");
-  } catch {
-    log(`  keep ${centralPkgPath} (cannot be written)`);
-  }
-} else log(`  write ${centralPkgPath} (merge @opencode-ai/plugin into dependencies)`);
+if (centralPkgWritable) {
+  centralPkg.dependencies = {
+    ...(centralPkg.dependencies || {}),
+    "@opencode-ai/plugin": "^1.19.1",
+    "opencode-mem": "2.32.0",
+  };
+  if (!DRY) {
+    try {
+      writeTextAtomic(centralPkgPath, JSON.stringify(centralPkg, null, 2) + "\n");
+    } catch {
+      log(`  keep ${centralPkgPath} (cannot be written)`);
+    }
+  } else log(`  write ${centralPkgPath} (merge @opencode-ai/plugin into dependencies)`);
+}
 run("npm", ["install", "--prefix", TARGET, "--no-audit", "--no-fund"]);
 
 log("== 4/6 skills (global, agent=opencode) ==");
@@ -765,7 +1000,7 @@ for (const name of AUTOINVOKE_SKILLS) {
 // versioned files are replaced, a file the user added is kept, and a file the
 // user changed in a shipped one is replaced like the rest of the versioned
 // content (unlike .env.example above).
-const VENDORED_SKILLS = ["architect", "audit", "check", "code-review", "debug", "design-system", "develop", "document", "kodus-review", "living-docs", "opencode-github", "pr-agent", "repo-standards", "scope", "ship", "skill-routing", "sync", "test", "write-swift"];
+const VENDORED_SKILLS = ["architect", "audit", "check", "code-review", "debug", "design-system", "develop", "document", "kodus-review", "living-docs", "mindmap", "opencode-github", "pr-agent", "repo-standards", "scope", "ship", "skill-routing", "sync", "test", "write-swift"];
 for (const name of VENDORED_SKILLS) {
   const src = join(REPO, "skills", name);
   const dest = join(SKILLS_DIR, name);
@@ -995,13 +1230,27 @@ log(`
   1. Auth:  kodus auth login   (or export KODUS_TEAM_KEY)
             gh auth login
   2. Env (the installer copies config/.env.example to .env in the opencode
-     config dir if missing — fill the placeholders in, never overwrite it):
-      CONTEXT7_API_KEY, SENTRY_ACCESS_TOKEN,
-      GOOGLE_APPLICATION_CREDENTIALS, GOOGLE_PROJECT_ID, DATABASE_URL,
-      MDB_MCP_CONNECTION_STRING, REDIS_URL, OPENCODE_ZEN_API_KEY,
-      KODUS_TEAM_KEY (or: kodus auth login)
+     config dir if missing - fill the placeholders in, never overwrite it).
+     GITHUB_TOKEN and SENTRY_ACCESS_TOKEN are header credentials on remote
+     servers: they belong in the environment that starts OpenCode, not in the
+     .env file, which only feeds the wrapped local servers:
+       CONTEXT7_API_KEY, GOOGLE_APPLICATION_CREDENTIALS, GOOGLE_PROJECT_ID,
+       DATABASE_URL, MDB_MCP_CONNECTION_STRING, REDIS_URL, OPENCODE_ZEN_API_KEY,
+       KODUS_TEAM_KEY (or: kodus auth login)
   3. Cluster: configure kubeconfig for the kubernetes MCP.
   4. Restart opencode (config is loaded once at startup).
   5. Per repo: run /pr-agent-setup once (adds PR-Agent Action; set OPENAI_KEY secret).
 `);
-log(DRY ? "DRY RUN — nothing executed." : "Done.");
+// The staging area is scratch space: it does not outlive the run. The root is
+// only removed when it is empty, so a second install running now keeps its
+// own staging area, and a dry run touches nothing.
+if (!DRY) {
+  try {
+    if (readdirSync(STAGING_ROOT).length === 0) {
+      rmSync(STAGING_ROOT, { recursive: true, force: true });
+    }
+  } catch {
+    // Another install may be using it.
+  }
+}
+log(DRY ? "DRY RUN - nothing executed." : "Done.");

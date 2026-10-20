@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" width="1200" height="300" role="img" aria-label="The four beats of the workflow and the gate that closes each one">
+  <defs>
+    <linearGradient id="wbg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0A0E1A"/>
+      <stop offset="1" stop-color="#0C1120"/>
+    </linearGradient>
+    <linearGradient id="wg" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#5B8CFF"/>
+      <stop offset="1" stop-color="#7C5BFF"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#33436B"/>
+    </marker>
+    <style>
+      .label { font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; }
+      .mono { font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace; }
+      .sweep { animation: sweep 5s linear infinite; }
+      @keyframes sweep { 0% { stroke-dashoffset: 300; } 100% { stroke-dashoffset: -300; } }
+      .gate { animation: beat 4s ease-in-out infinite; }
+      .g2 { animation-delay: 1s; } .g3 { animation-delay: 2s; } .g4 { animation-delay: 3s; }
+      @keyframes beat { 0%,70%,100% { opacity: .55; } 85% { opacity: 1; } }
+    </style>
+  </defs>
+
+  <rect width="1200" height="300" fill="url(#wbg)"/>
+  <rect x="0" y="0" width="1200" height="2" fill="url(#wg)" opacity="0.6"/>
+
+  <text class="label" x="40" y="44" fill="#F2F5FF" font-size="22" font-weight="700">The workflow</text>
+  <text class="label" x="40" y="68" fill="#8496BC" font-size="15">Four beats, and a gate that closes each one. The order is the product.</text>
+
+  <g transform="translate(40,100)">
+    <g>
+      <rect x="0" y="0" width="250" height="96" rx="14" fill="#101829" stroke="#2A3A63"/>
+      <text class="label" x="22" y="34" fill="#F2F5FF" font-size="19" font-weight="700">1 · Isolate</text>
+      <text class="label" x="22" y="58" fill="#93A5C8" font-size="13.5">A worktree per task, on the</text>
+      <text class="label" x="22" y="76" fill="#93A5C8" font-size="13.5">repository's own drive.</text>
+      <text class="label mono gate" x="22" y="120" fill="#5B8CFF" font-size="13">· new-feature</text>
+    </g>
+    <line x1="262" y1="48" x2="296" y2="48" stroke="#33436B" stroke-width="2" marker-end="url(#arrow)"/>
+
+    <g transform="translate(300,0)">
+      <rect x="0" y="0" width="250" height="96" rx="14" fill="#101829" stroke="#2A3A63"/>
+      <text class="label" x="22" y="34" fill="#F2F5FF" font-size="19" font-weight="700">2 · Build</text>
+      <text class="label" x="22" y="58" fill="#93A5C8" font-size="13.5">/develop plus the stack</text>
+      <text class="label" x="22" y="76" fill="#93A5C8" font-size="13.5">skills, one scope per lane.</text>
+      <text class="label mono gate g2" x="22" y="120" fill="#6E7BFF" font-size="13">· agents-scope --check</text>
+    </g>
+    <line x1="562" y1="48" x2="596" y2="48" stroke="#33436B" stroke-width="2" marker-end="url(#arrow)"/>
+
+    <g transform="translate(600,0)">
+      <rect x="0" y="0" width="250" height="96" rx="14" fill="#101829" stroke="#2A3A63"/>
+      <text class="label" x="22" y="34" fill="#F2F5FF" font-size="19" font-weight="700">3 · Prove</text>
+      <text class="label" x="22" y="58" fill="#93A5C8" font-size="13.5">Checks, runtime evidence,</text>
+      <text class="label" x="22" y="76" fill="#93A5C8" font-size="13.5">Kodus, then the review gate.</text>
+      <text class="label mono gate g3" x="22" y="120" fill="#7C5BFF" font-size="13">· /code-review</text>
+    </g>
+    <line x1="862" y1="48" x2="896" y2="48" stroke="#33436B" stroke-width="2" marker-end="url(#arrow)"/>
+
+    <g transform="translate(900,0)">
+      <rect x="0" y="0" width="220" height="96" rx="14" fill="#0F1A1B" stroke="#1E4A3C"/>
+      <text class="label" x="22" y="34" fill="#F2F5FF" font-size="19" font-weight="700">4 · Ship</text>
+      <text class="label" x="22" y="58" fill="#93A5C8" font-size="13.5">A pull request, pushed,</text>
+      <text class="label" x="22" y="76" fill="#93A5C8" font-size="13.5">and a human merge.</text>
+      <text class="label mono gate g4" x="22" y="120" fill="#2EE6A8" font-size="13">· gh pr create</text>
+    </g>
+
+    <path class="sweep" d="M125 150 L125 176 L1010 176 L1010 150" fill="none" stroke="url(#wg)" stroke-width="2" stroke-dasharray="6 10" opacity="0.8"/>
+    <text class="mono" x="125" y="196" fill="#5B8CFF" font-size="12.5">the gate blocks gh pr create until a review of the exact commit exists</text>
+  </g>
+</svg>

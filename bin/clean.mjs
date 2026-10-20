@@ -43,7 +43,7 @@
 
 import { existsSync, lstatSync, readdirSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { join, resolve, sep } from "node:path";
+import { join, parse, resolve, sep } from "node:path";
 
 // ------------------------------------------------------------------ options --
 
@@ -194,7 +194,18 @@ const profile = process.env.USERPROFILE || home;
 // `resolve` strips the trailing separator Windows sometimes leaves on TEMP and
 // gives us one absolute path to compare against.
 const tempRoot = resolve(process.env.TEMP || tmpdir());
-const worktreeRoot = process.env.OPENCODE_WORKTREE_ROOT || "F:\\worktrees";
+// Worktrees live on the same drive as their repository (AGENTS.md), so the
+// hygiene report has to look there and not only at one fixed letter. The
+// repository's own drive is the first candidate; the rest are extra roots.
+const worktreeRoots = [
+  ...new Set(
+    [
+      process.env.OPENCODE_WORKTREE_ROOT,
+      join(parse(process.cwd()).root, "Work", "worktrees"),
+      "F:\\worktrees",
+    ].filter(Boolean),
+  ),
+];
 
 // Never measured as reclaimable, never deleted. The plugin install tree is
 // the one that matters: it is a cache directory by name only.
@@ -313,7 +324,8 @@ if (!SKIP_TEMP && existsSync(tempRoot)) {
 // Worktree node_modules are reported only. A live session may be running a dev
 // server or tests out of one, and there is no reliable way to tell from here.
 const worktreeRows = [];
-if (existsSync(worktreeRoot)) {
+for (const worktreeRoot of worktreeRoots) {
+  if (!existsSync(worktreeRoot)) continue;
   for (const repo of readdirSync(worktreeRoot, { withFileTypes: true })) {
     if (!repo.isDirectory() || repo.isSymbolicLink()) continue;
     const repoPath = join(worktreeRoot, repo.name);

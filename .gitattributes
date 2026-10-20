@@ -1,1 +1,12 @@
 * text=auto
+
+# The repository is read by scripts that compare text: the README stats, the
+# standards check, the review gate. A line ending that depends on the
+# platform would make those checks fail on one machine and pass on another.
+*.md text eol=lf
+*.json text eol=lf
+*.jsonc text eol=lf
+*.mjs text eol=lf
+*.ts text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
