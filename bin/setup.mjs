@@ -312,6 +312,12 @@ const isFile = (p) => {
 // Copy a tree over another one, file by file, without deleting what is
 // already there.
 const mergeDir = (src, dest) => {
+  // A destination that exists as a file cannot hold the shipped directory:
+  // creating it would throw and abort the install half way.
+  if (existsSync(dest) && isFile(dest)) {
+    log(`  keep ${dest} (you have a file where the shipped tree needs a directory)`);
+    return;
+  }
   mkdirSync(dest, { recursive: true });
   for (const entry of readdirSync(src, { withFileTypes: true })) {
     const from = join(src, entry.name);
