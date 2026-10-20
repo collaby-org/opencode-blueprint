@@ -312,6 +312,27 @@ const isRegular = (p) => {
     return false;
   }
 };
+// A dangling link is a path that exists even though it resolves to nothing,
+// so existsSync() (which follows the link) says false. The destination checks
+// ask the path itself.
+const existsAny = (p) => {
+  try {
+    lstatSync(p);
+    return true;
+  } catch {
+    return false;
+  }
+};
+// Copy a file, and never let one bad destination abort the install.
+const copyOrKeep = (from, to) => {
+  try {
+    copyFileSync(from, to);
+    return true;
+  } catch {
+    log(`  keep ${to} (cannot be written)`);
+    return false;
+  }
+};
 // Copy a tree over another one, file by file, without deleting what is
 // already there.
 const mergeDir = (src, dest) => {
@@ -351,17 +372,29 @@ const mergeDir = (src, dest) => {
     if (!entry.isFile()) continue;
     // A destination that is not a regular file is never written: copying into
     // it throws, and one bad entry must not abort the whole install.
-    if (existsSync(to) && !isRegular(to)) {
+    if (existsAny(to) && !isRegular(to)) {
       log(`  keep ${to} (not a regular file; not ours to replace)`);
       continue;
     }
-    copyFileSync(from, to);
+    copyOrKeep(from, to);
   }
 };
 const cp = (src, dest) => {
   log(`  copy ${src} -> ${dest}`);
   if (!DRY) {
-    if (existsSync(dest)) rmSync(dest, { recursive: true, force: true });
+    if (existsAny(dest)) {
+      // A link is not ours to replace: copying through it would write outside
+      // the config home.
+      try {
+        if (lstatSync(dest).isSymbolicLink()) {
+          log(`  keep ${dest} (a link; not ours to replace)`);
+          return;
+        }
+      } catch {
+        // Fall through to the copy.
+      }
+      rmSync(dest, { recursive: true, force: true });
+    }
     cpSync(src, dest, { recursive: true });
   }
 };
@@ -377,9 +410,9 @@ const cpDirIfMissing = (src, dest) => {
     if (!entry.isFile()) continue;
     const from = join(src, entry.name);
     const to = join(dest, entry.name);
-    if (!existsSync(to)) {
+    if (!existsAny(to)) {
       log(`  copy ${from} -> ${to}`);
-      if (!DRY) copyFileSync(from, to);
+      if (!DRY) copyOrKeep(from, to);
       continue;
     }
     if (!isRegular(to)) {
@@ -410,7 +443,7 @@ for (const entry of readdirSync(agentsSrc, { withFileTypes: true })) {
   if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
   const src = join(agentsSrc, entry.name);
   const dest = join(agentsDest, entry.name);
-  if (existsSync(dest)) {
+  if (existsAny(dest)) {
     if (!isRegular(dest)) {
       log(`  keep ${dest} (not a regular file; not ours to replace)`);
       continue;
@@ -424,7 +457,7 @@ for (const entry of readdirSync(agentsSrc, { withFileTypes: true })) {
     continue;
   }
   log(`  copy ${src} -> ${dest}`);
-  if (!DRY) copyFileSync(src, dest);
+  if (!DRY) copyOrKeep(src, dest);
 }
 // The V1 `agent/` directory is ignored by V2. Remove it only when it holds
 // nothing but the exact file this installer shipped; anything else belongs to
