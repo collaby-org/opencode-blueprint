@@ -41,6 +41,11 @@ commit date of the same version.
 
 ### Fixed
 
+- The secret scan found a Kodus team key that was committed to
+  `skills/kodus-review/SKILL.md` on 2026-10-03. The value is no longer in the
+  file, and `.gitleaks.toml` allowlists that one historical fingerprint so the
+  scan can pass. The credential itself is leaked and must be rotated in the
+  Kodus app.
 - The installer never writes through a path that is not a regular file and never
   creates a directory where a user file sits: a shipped file is written file by
   file, a command the user changed is kept and backed up, and a file, a
