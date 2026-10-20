@@ -159,22 +159,23 @@ partitions, cut it into work units, give every writer one path set, one
 worktree and one owner — a shared type, a schema, a generated file, a lockfile
 or a migration gets a single owner who lands it first — and let read-only
 lanes overlap freely. Write the scope manifest and check it before dispatching
-and the result against it afterwards: `node bin/agents-scope.mjs --write
-.agents/lanes.json`, `--check`, `--verify --changed <file>,<file>`. The full
-contract lives in the orchestrator agent.
+and the result against it afterwards: `node ~/.config/opencode/tools/agents-scope.mjs
+--write .agents/lanes.json`, `--check`, `--verify --changed <file>,<file>`. The
+tool is installed globally; inside the blueprint repository the same file is
+`bin/agents-scope.mjs`. The full contract lives in the orchestrator agent.
 
 ## Disk hygiene (always)
 
 Keep the system drive above ~15 GB free; ten sessions may be running at once,
-so a cleanup must never break one. `node bin/clean.mjs` reports safe
-deletions; `--apply` removes package-manager caches, old opencode logs and
-aged temp directories. It never deletes `~/.cache/opencode` (the installed
-plugin tree — removing it is what made plugin-provided agents disappear and
-produced `Agent not found: "orchestrator"`), never a worktree's
+so a cleanup must never break one. `node ~/.config/opencode/tools/clean.mjs`
+reports safe deletions; `--apply` removes package-manager caches, old opencode
+logs and aged temp directories. It never deletes `~/.cache/opencode` (the
+installed plugin tree — removing it is what made plugin-provided agents
+disappear and produced `Agent not found: "orchestrator"`), never a worktree's
 `node_modules`, and never anything a live session may be reading. One
 dependency tree per plugin. Delete a worktree only after its branch is merged
-and no session uses it; say so in the report. Mechanism and safety window:
-`bin/clean.mjs`.
+and no session uses it; say so in the report. Inside the blueprint repository
+the same tool is `bin/clean.mjs`.
 
 ## Local code review gate (always)
 
@@ -186,8 +187,10 @@ review of the current HEAD returns `approve` or `approve-with-nits`. Three
 deliberate escapes, nothing else: draft PR, `enforce_pr_gate: false` in
 `.opencode/review.json`, and `CODE_REVIEW_SKIP=1 gh pr create ...` for one
 command. The reviewer never edits code; findings go to the implementer.
-Sync the result with `post-review.mjs --apply` (one sticky comment). GitHub
-Kodus and PR-Agent remain the last resort, never a substitute.
+Sync the result with
+`node ~/.agents/skills/code-review/scripts/post-review.mjs --apply` (one sticky
+comment). GitHub Kodus and PR-Agent remain the last resort, never a
+substitute.
 
 ## Kodus loop (always)
 

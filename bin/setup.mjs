@@ -739,6 +739,12 @@ if (!toolsDirReady) log(`  keep ${toolsDir} (a link or a file; not ours to write
 else {
   if (!DRY) ensureDir(toolsDir);
   cp(join(REPO, "config", "tools", "mcp-env.mjs"), join(toolsDir, "mcp-env.mjs"));
+// The tools every project needs, wherever the work happens: the parallel
+// dispatch check and the disk hygiene report. They live in the config home
+// because `bin/` only exists inside the blueprint repository, and an agent on
+// another machine must not hit a missing file.
+cp(join(REPO, "bin", "agents-scope.mjs"), join(toolsDir, "agents-scope.mjs"));
+cp(join(REPO, "bin", "clean.mjs"), join(toolsDir, "clean.mjs"));
 }
 // Copy .env.example as a starter template only — never overwrite an existing
 // (possibly filled-in) .env.example in TARGET.

@@ -58,10 +58,14 @@ change genuinely partitions; otherwise one lane, one brief, one result.
   before dispatching, and check the result against it afterwards:
 
   ```
-  node bin/agents-scope.mjs --write .agents/lanes.json     # template
-  node bin/agents-scope.mjs --check .agents/lanes.json      # exit 1 on a conflict
-  node bin/agents-scope.mjs --verify .agents/lanes.json --changed <file>,<file>
+  node ~/.config/opencode/tools/agents-scope.mjs --write .agents/lanes.json
+  node ~/.config/opencode/tools/agents-scope.mjs --check .agents/lanes.json
+  node ~/.config/opencode/tools/agents-scope.mjs --verify .agents/lanes.json --changed <file>,<file>
   ```
+
+  The tool is installed with the blueprint, in the config home, so it works in
+  every project. If it is not there, say so and continue without the check —
+  never fake a clean result.
 
   The first check fails when two writing lanes claim one path, when a path
   leaves the repository, when a dependency does not exist, or when a writing

@@ -97,9 +97,9 @@ path set, one worktree and one owner, and proves the plan before it spawns
 anything:
 
 ```bash
-node bin/agents-scope.mjs --write .agents/lanes.json                 # template
-node bin/agents-scope.mjs --check .agents/lanes.json                  # conflicts
-node bin/agents-scope.mjs --verify .agents/lanes.json --changed a.js  # after
+node ~/.config/opencode/tools/agents-scope.mjs --write .agents/lanes.json   # template
+node ~/.config/opencode/tools/agents-scope.mjs --check .agents/lanes.json    # conflicts
+node ~/.config/opencode/tools/agents-scope.mjs --verify .agents/lanes.json --changed a.js
 ```
 
 The check fails on two writing lanes claiming one path, a path outside the
@@ -315,9 +315,9 @@ the installer needs — so do not put a credential in a tracked file.
 | `skills/` | The vendored workflow skills, the `repo-standards` baseline and the `mindmap` skill (the rest come from the installer registry list) |
 | `config/.env.example` | Required env vars (values never committed) |
 | `bin/setup.mjs` | The installer |
-| `bin/agents-scope.mjs` | The parallel dispatch check: scope conflicts, dependencies, waves, and what a lane actually changed |
+| `bin/agents-scope.mjs` | The parallel dispatch check: scope conflicts, dependencies, waves, and what a lane actually changed. Installed to `~/.config/opencode/tools/agents-scope.mjs`, so it works in any project |
 | `bin/readme-stats.mjs` | The numbers in this README, counted from the repository |
-| `bin/clean.mjs` | Disk reclamation: report by default; `--apply` deletes package-manager caches and day-old review scratch, never the plugin tree or worktree `node_modules` |
+| `bin/clean.mjs` | Disk reclamation: report by default; `--apply` deletes package-manager caches and day-old review scratch, never the plugin tree or worktree `node_modules`. Installed to `~/.config/opencode/tools/clean.mjs` |
 
 ## Contributing
 
