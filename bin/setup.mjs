@@ -316,8 +316,18 @@ const mergeDir = (src, dest) => {
   for (const entry of readdirSync(src, { withFileTypes: true })) {
     const from = join(src, entry.name);
     const to = join(dest, entry.name);
-    if (entry.isDirectory()) mergeDir(from, to);
-    else if (entry.isFile()) copyFileSync(from, to);
+    if (entry.isDirectory()) {
+      mergeDir(from, to);
+      continue;
+    }
+    if (!entry.isFile()) continue;
+    // A destination that is not a regular file is never written: copying into
+    // it throws, and one bad entry must not abort the whole install.
+    if (existsSync(to) && !isFile(to)) {
+      log(`  keep ${to} (not a regular file; not ours to replace)`);
+      continue;
+    }
+    copyFileSync(from, to);
   }
 };
 const cp = (src, dest) => {
