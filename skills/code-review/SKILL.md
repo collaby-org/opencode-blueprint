@@ -165,6 +165,11 @@ The script prints JSON. Read these fields:
 - `totals`: files, added, removed, skipped, truncated chunks.
 - `skipped[]`: lockfiles, generated output, binaries, snapshots. Say the count
   once, not per file.
+- `chunksExceedBudget` true: the change needs more chunks than the agent
+  budget can give a reviewer, so the tail chunk would never be read. Rerun the
+  planner with a larger `--chunk-tokens` until it is false. Do not spawn
+  reviewers for a plan that says true: the reconciler will not call that
+  review complete.
 
 Do not read the diff into your own context. The chunk files are for the
 reviewer agents. You only need the plan.
@@ -261,6 +266,9 @@ exists.
 
 Read the JSON summary: `verdict`, `counts`, `complete`, `agents`, `reportPath`.
 
+- `chunksExceedBudget` true: the plan left a chunk without a reviewer. Rerun
+  the planner with a larger `--chunk-tokens` and review again. The reconciler
+  reports `complete: false` for that reason on purpose.
 - `complete: false` means an agent did not report. That is not a clean review.
   Respawn the missing chunk once, with the next model in the ladder if the
   first failed at the provider level. If it fails again, keep

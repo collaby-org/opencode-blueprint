@@ -388,6 +388,12 @@ function main() {
     chunks.length * passes <= agentBudget
       ? chunks.length * passes
       : Math.min(chunks.length, agentBudget);
+  // More chunks than the budget can give an agent: the tail chunk gets no
+  // reviewer, so its content would never be read. The count above cannot
+  // express that, so the overshoot is recorded and the reconciler refuses to
+  // call such a review complete. Rerun the planner with a larger
+  // --chunk-tokens to bring the chunks inside the budget.
+  const chunksExceedBudget = chunks.length > agentBudget;
 
   const plan = {
     empty: chunks.length === 0,
@@ -401,6 +407,7 @@ function main() {
     planDir,
     level: args.level,
     agents,
+    chunksExceedBudget,
     budget: { maxContextTokens: maxContext, chunkTokens },
     totals: {
       files: files.length,

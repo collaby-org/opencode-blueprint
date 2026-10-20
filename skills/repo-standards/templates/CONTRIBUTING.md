@@ -60,10 +60,10 @@ numbers.
 
 ## Review rounds
 
-Three review rounds are the limit. Each round ends with the reviewer's new
-findings resolved or explicitly deferred with a reason. After the third round,
+Two review rounds are the limit. Each round ends with the reviewer's new
+findings resolved or explicitly deferred with a reason. After the second round,
 stop and fix the cause: split the pull request, change the design, or ask for a
-decision. Do not open a fourth round on the same shape.
+decision. Do not open a third round on the same shape.
 
 ## Secrets
 

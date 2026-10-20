@@ -1,6 +1,8 @@
 # Workflows
 
-This repository treats two checks as required and two review jobs as advisory.
+This repository treats two checks as required. The advisory review jobs below
+are not part of this scaffold: they exist only when the opencode GitHub
+integration added them.
 
 ## Required
 
@@ -13,6 +15,9 @@ This repository treats two checks as required and two review jobs as advisory.
   workflow, and every action is pinned to a commit.
 
 ## Advisory
+
+These are added by the opencode GitHub integration, not by this scaffold. When
+they are present:
 
 - `kodus.yml` runs the Kodus review when `KODUS_TEAM_KEY` exists. It skips
   itself otherwise.

@@ -138,10 +138,19 @@ function dedupe(findings) {
       kept.set(key, finding);
       continue;
     }
-    if (finding.confidence > existing.confidence) {
-      kept.set(key, { ...finding, sources: [existing.source, finding.source] });
+    const sources = [...(existing.sources || [existing.source]), finding.source];
+    const rank = SEVERITY_RANK[finding.severity] ?? 0;
+    const existingRank = SEVERITY_RANK[existing.severity] ?? 0;
+    // Severity wins first: a blocker and a nit can land in the same bucket,
+    // and keeping the nit because it was more confident would erase the
+    // blocker and flip the verdict. Confidence only breaks a tie inside one
+    // severity.
+    if (rank > existingRank) {
+      kept.set(key, { ...finding, sources });
+    } else if (rank === existingRank && finding.confidence > existing.confidence) {
+      kept.set(key, { ...finding, sources });
     } else {
-      existing.sources = [...(existing.sources || [existing.source]), finding.source];
+      kept.set(key, { ...existing, sources });
     }
   }
   return [...kept.values()];
@@ -264,7 +273,12 @@ function main() {
     ? plan.agents
     : plan.level === "quick" ? 1 : 2;
   const expected = Number.isFinite(args.expected) && args.expected > 0 ? args.expected : planAgents;
-  const complete = all.fileCount >= expected;
+  // A plan whose chunks outran the agent budget left the tail chunk without a
+  // reviewer. No report for it can be missing, so the file count alone would
+  // call the review complete. Fail closed instead: the plan has to be rerun
+  // with a larger --chunk-tokens.
+  const chunksExceedBudget = plan.chunksExceedBudget === true;
+  const complete = all.fileCount >= expected && !chunksExceedBudget;
   const lineSets = parseLineSets(plan);
 
   const passed = [];
@@ -325,9 +339,13 @@ function main() {
     complete,
     expected,
     reported: all.fileCount,
+    chunksExceedBudget,
   });
   if (overflow > 0) {
     body += `\n> ${overflow} further finding(s) were over the ${maxFindings} limit and are not listed. Re-run with --max-findings all for the full set.\n`;
+  }
+  if (chunksExceedBudget) {
+    body += `\n> The plan has more chunks than the agent budget, so the tail chunk never had a reviewer. This review is not complete: rerun plan-review.mjs with a larger --chunk-tokens.\n`;
   }
   // The report is a committed artifact, so it gets the same redaction as the
   // PR comment: a secret quoted in a finding must not reach the repository.
@@ -343,6 +361,7 @@ function main() {
     verdict,
     complete,
     agents: { expected, reported: all.fileCount },
+    chunksExceedBudget,
     counts: {
       blocker: findings.filter((f) => f.severity === "blocker").length,
       major: findings.filter((f) => f.severity === "major").length,
