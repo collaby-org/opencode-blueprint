@@ -65,6 +65,8 @@ That is the intent, not the procedure. How to run the questioning lives in `inte
 
 Spec files in `docs/specs/`, created or updated by this skill only, plus any supporting evidence it produces (inventories, audits), which lives in the spec's `rationale.md` (directory spec) or inline (single file spec), never in the scope folder (`docs/scope/` is owned by `/scope`, not a spec).
 
+Resolve the same docs base `/scope` used. Record the decision's version impact (major / minor / patch) in the spec's Consequences; a decision that outlives the spec also gets a `docs/architecture/<slug>.md` record.
+
 Two independent choices, location (repo shape) and shape (decision size):
 
 - **Location = repo shape.** Single repo → `docs/specs/`. Monorepo → `docs/specs/<workspace>/` for a workspace decision, `docs/specs/_root/` for a repo wide one (mirrors the scope). Numbering is per location (scan that dir for the next `NNNN`). Call the resolved location `$SPEC_DIR`.

@@ -44,7 +44,8 @@ invariants into the repo's own `AGENTS.md`; this file governs everywhere.
    Then the **local code review gate** (`/code-review`, see below) on a model
    from a different family than the author, then the **Kodus loop** (see
    below). That order is fixed: nothing commits until both are clean.
-4. **Ship — proof, polish, review.** PR body carries before/after evidence,
+4. **Ship — proof, polish, review.** PR body carries before/after evidence
+   and `version: before → after`,
    `/unslop` cleans all human-read text, `opencode-review` (`/review`)
    auto-fixes code findings, PR-Agent (`/pr-agent`) and Kodus review comments
    go to zero. Present the PR URL. Do not merge unless told to. Keep the
@@ -75,6 +76,36 @@ The repo's `AGENTS.md` must always match the global one
   explicit authorization in that same task. Ask first, never replace on its
   own. Never leave a diverged `AGENTS.md` behind.
 - **Bar.** AGENTS.md must never be edited by AI without user consent.
+
+## Docs and versions (always)
+
+Every project carries its own documentation home and its own version. They
+live with the project, never only in this blueprint, in chat, or in a private
+vault.
+
+- **Resolve the docs home first.** Use the home the project already has:
+  `docs/`, the app's `<app>/docs/` in a monorepo, or the linked documentation
+  repository / vault (`Obsidian-Documentation*`, `Documentation/`, `.docs/`).
+  When `docs/` is a published docs site, the workflow base is `.workflow/`
+  (same base as `/scope`, `/architect`, `/develop`). Nothing exists: create
+  `docs/`. A vault mirror is a copy; the repo copy is the source of truth and
+  ships in the same PR.
+- **Read the version before work.** Manifest (`package.json`,
+  `composer.json`, `pyproject.toml`, `*.csproj`, …) or `docs/VERSION`; no
+  version → start at `1.0.0`. Every app or workstream that ships on its own
+  (frontend, API, mobile) has its own line.
+- **One PR, one bump.** Feature or architecture PR → minor (`1.2.0` →
+  `1.3.0`); fix, docs or chore → patch; breaking → major. Each change made
+  while the PR is open bumps the patch (`1.3.1` … `1.3.35`), so the PR lands at
+  the highest patch. Bump the manifest and write the changelog line in the same
+  commit as the change.
+- **Update before you stop.** End of PR and every pause: changelog entry per
+  change, roadmap status, spec marked correct / incorrect / deferred, decisions
+  recorded. The PR body states `version: before → after`. Code without its docs
+  entry is not done.
+- **Release from the merged commit.** Tag `v<version>` only after merge, notes
+  copied from the changelog section. Full protocol: `document` skill,
+  `reference/versioning.md`.
 
 ## Living docs (always)
 
@@ -189,12 +220,15 @@ materializes its own copy. Stale system docs are a bug.
   pnpm caches, pip/uv wheels, OpenCode plugin caches and orphaned worktree
   `node_modules` trees are the usual 60+ GB.
 - After any install-heavy step, reclaim: `node bin/clean.mjs` reports what is
-  safe to delete, `node bin/clean.mjs --apply` deletes it (npm cache, Yarn
-  cache, pnpm store, pip/uv caches, `~/.cache/opencode`).
+  safe to delete, `node bin/clean.mjs --apply` deletes package-manager caches
+  (npm, Yarn, pnpm, pip, uv) and review scratch older than a day. The plugin
+  install tree (`~/.cache/opencode`) and worktree `node_modules` are never
+  deleted by it: a running session may be reading them.
 - One copy of a dependency tree, never two. A plugin the loader resolves from
-  `<config>/node_modules` gets no local `node_modules` of its own; a worktree's
-  `node_modules` is deleted when the worktree closes.
+  `<config>/node_modules` gets no local `node_modules` of its own.
 - Delete the worktree once its branch is merged, and say so in the report.
+  Deleting the worktree removes its `node_modules`; do it only after the merge
+  and only when no session is using that worktree.
 
 ## Local code review gate (always)
 

@@ -27,7 +27,7 @@ Then the Kodus loop to clean (no high/critical — full loop in the `kodus-revie
 
 ## 5. Push and PR
 
-Push, open PR: what changed, how tested (every claim evidenced), before/after proof, risks/follow-ups. Sync the local review to the PR with `node <skill>/scripts/post-review.mjs --apply` (one sticky comment, updated in place). Then `/check review` for the quick single pass, `/document` for the prose from the real diff, `/unslop` on title + body.
+Push, open PR: what changed, how tested (every claim evidenced), before/after proof, `version: before → after`, risks/follow-ups. Before pushing, check the final state: manifest version, changelog entry, roadmap status, spec status — a PR without them is not ready. Sync the local review to the PR with `node <skill>/scripts/post-review.mjs --apply` (one sticky comment, updated in place). Then `/check review` for the quick single pass, `/document` for the prose from the real diff, `/unslop` on title + body.
 
 ## 6. Reviews to zero
 
@@ -35,4 +35,4 @@ Push, open PR: what changed, how tested (every claim evidenced), before/after pr
 
 ## 7. Close
 
-Do not merge unless told to. Keep the worktree until merge/close. `/sync` is HUMAN-ONLY (see `AGENTS.md`) — never auto-chained after `/document` or merge.
+Do not merge unless told to. Keep the worktree until merge/close. After the merge, tag `v<version>` from the merged commit and copy the changelog section into the release notes; never tag a branch commit. `/sync` is HUMAN-ONLY (see `AGENTS.md`) — never auto-chained after `/document` or merge.

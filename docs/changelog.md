@@ -9,9 +9,10 @@ Version 1.0.0 was published to npm but never got a git tag, so it has no tag
 range. The npm publish timestamps are UTC and can sit a day earlier than the
 commit date of the same version.
 
-## [Unreleased]
+## [1.3.0] - 2026-10-20
 
-Working tree changes that are not tagged yet. Snapshot taken 2026-10-20.
+Local code review gate, versioned docs flow, and the MCP and cleanup fixes.
+Published to npm and tagged from the merge commit.
 
 ### Changed
 
@@ -28,6 +29,13 @@ Working tree changes that are not tagged yet. Snapshot taken 2026-10-20.
 
 ### Added
 
+- Versioned docs flow in `AGENTS.md` and the skills. Every project resolves its
+  own docs home (`docs/`, an app-level `docs/`, a linked vault such as
+  `Obsidian-Documentation*`, or `.workflow/` for a published site) and its own
+  version line. A feature PR opens a minor; each change while it is open bumps
+  the patch; the changelog entry is written in the same commit as the change.
+  Code without its docs entry is not done. Full protocol in the `document`
+  skill, `reference/versioning.md`.
 - The local code review gate is wired end to end. New `code-review` skill
   (`/code-review`) with three scripts and three reference files:
   `plan-review.mjs` resolves the scope, classifies files, and splits the diff

@@ -27,7 +27,14 @@ Acts. Asks at most one question (which type) when it can't be inferred, and (for
 
 ## Artifact ownership
 
-PR text, `CHANGELOG.md`, `docs/releases/`, `docs/postmortems/` (owned by this skill). It writes nothing else.
+PR text, the changelog (`CHANGELOG.md` or `docs/changelog.md`, whichever the
+docs home already uses), `docs/releases/`, `docs/postmortems/` (owned by this
+skill). It writes nothing else.
+
+Resolve the docs home and the version line first (`reference/versioning.md`).
+The changelog heading is the manifest version; a PR body states
+`version: before → after`; release notes copy the changelog section verbatim.
+Never write a version heading the manifest does not carry.
 
 ---
 
@@ -118,4 +125,5 @@ This skill does not commit, push, or merge; it produces the prose (and ticks the
 ## Reference files
 
 - `agent-prompt.md`: the writing guide the main thread reads and follows at write time (Step 3)
+- `reference/versioning.md`: docs home resolution, version bump matrix, changelog entry shape, stop rule and release rule. Read it before writing a changelog, PR body or release note.
 - `templates/`: one structure file per type (`pr.md`, `changelog.md`, `release-note.md`, `postmortem.md`); the main thread reads only the chosen one at write time
