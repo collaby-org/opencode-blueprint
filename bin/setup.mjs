@@ -507,6 +507,25 @@ const cp = (src, dest) => {
 };
 cp(join(REPO, "config", "opencode.jsonc"), join(TARGET, "opencode.jsonc"));
 cp(join(REPO, "AGENTS.md"), join(TARGET, "AGENTS.md"));
+// The MCP servers that need a credential fail at connect time when the value
+// is not in the process environment, and the host expands {env:NAME} from
+// its own environment when it starts. A value set after the host started is
+// invisible until it is restarted, so say it here instead of leaving the
+// MCPs silently red.
+const MCP_ENV = [
+  ["GITHUB_TOKEN", "the github MCP (Authorization: Bearer {env:GITHUB_TOKEN})"],
+  ["SENTRY_ACCESS_TOKEN", "the sentry MCP (Sentry-Bearer {env:SENTRY_ACCESS_TOKEN})"],
+];
+for (const [name, why] of MCP_ENV) {
+  if (!process.env[name]) {
+    log(`  note: ${name} is not in this process environment, so ${why} cannot connect`);
+  }
+}
+log("  note: set a missing value in the environment that starts OpenCode, then restart the app; a value set after the start is not visible");
+// opencode-mem opens a local Turso database that only one process may own.
+// A second OpenCode server cannot open it, and the plugin reports itself as
+// failed. One server at a time.
+log("  note: opencode-mem holds a single-writer database; run one OpenCode server at a time");
 // The commands directory holds the shipped commands and the ones the user
 // wrote. Copy the shipped ones that are missing, keep a tuned file with a
 // backup, and never remove a file this installer did not put there.

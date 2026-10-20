@@ -9,6 +9,17 @@ Version 1.0.0 was published to npm but never got a git tag, so it has no tag
 range. The npm publish timestamps are UTC and can sit a day earlier than the
 commit date of the same version.
 
+## [1.4.1] - 2026-10-20
+
+### Added
+
+- The installer reports the MCP credentials that are missing from the process
+  environment (`GITHUB_TOKEN`, `SENTRY_ACCESS_TOKEN`) and says that a value set
+  after the host started is not visible until it restarts.
+- The installer reports that `opencode-mem` holds a single-writer database: run
+  one OpenCode server at a time, or the second one cannot open it and the
+  plugin reports itself as failed.
+
 ## [1.4.0] - 2026-10-20
 
 ### Added
