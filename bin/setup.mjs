@@ -308,7 +308,9 @@ cp(join(REPO, "config", "commands"), join(TARGET, "commands"));
 // The orchestrator agent is a file, not a slim default: with
 // setDefaultAgent=false slim no longer registers the name, and sessions or
 // task sessions that still reference it fail to drain with `Agent not found`.
-cp(join(REPO, "config", "agent"), join(TARGET, "agent"));
+// V2 reads agent markdown from `agents/` (plural); the v1 `agent/` directory
+// is ignored, which is why the file used to be missing at runtime.
+cp(join(REPO, "config", "agents"), join(TARGET, "agents"));
 cp(join(REPO, "config", "plugins", "opencode-review"), join(TARGET, "plugins", "opencode-review"));
 cp(join(REPO, "config", "plugins", "opencode-code-review"), join(TARGET, "plugins", "opencode-code-review"));
 cp(join(REPO, "config", "plugins", "opencode-dcp"), join(TARGET, "plugins", "opencode-dcp"));
@@ -427,7 +429,7 @@ for (const name of AUTOINVOKE_SKILLS) {
 // Vendored local/workflow skills (skills/ in this repo) — cannot be installed
 // via `skills add`, copied verbatim. Overwrite is correct (versioned content,
 // unlike .env.example above).
-const VENDORED_SKILLS = ["architect", "audit", "check", "code-review", "debug", "design-system", "develop", "document", "kodus-review", "living-docs", "opencode-github", "pr-agent", "scope", "ship", "sync", "test", "write-swift"];
+const VENDORED_SKILLS = ["architect", "audit", "check", "code-review", "debug", "design-system", "develop", "document", "kodus-review", "living-docs", "opencode-github", "pr-agent", "repo-standards", "scope", "ship", "skill-routing", "sync", "test", "write-swift"];
 for (const name of VENDORED_SKILLS) {
   const src = join(REPO, "skills", name);
   const dest = join(SKILLS_DIR, name);

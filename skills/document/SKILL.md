@@ -19,7 +19,7 @@ Generates one of four document types from the real change history. The main thre
 | Type | Source | Audience | Output |
 |---|---|---|---|
 | `pr` | branch commits + diff vs base | reviewers | PR title + body (chat; optionally `gh pr` create/edit) |
-| `changelog` | merged change | developers | entry appended to `CHANGELOG.md` (Keep a Changelog) |
+| `changelog` | merged change | developers | entry appended to the changelog of the folder worked in (`reference/versioning.md`) |
 | `release-note` | a tag/version range | end users | `docs/releases/<version>.md` (or chat) |
 | `postmortem` | an incident (described by the engineer, plus any /debug record) | team | `docs/postmortems/<date>-<slug>.md` |
 
@@ -27,14 +27,18 @@ Acts. Asks at most one question (which type) when it can't be inferred, and (for
 
 ## Artifact ownership
 
-PR text, the changelog (`CHANGELOG.md` or `docs/changelog.md`, whichever the
-docs home already uses), `docs/releases/`, `docs/postmortems/` (owned by this
-skill). It writes nothing else.
+PR text, the changelog of the folder worked in, `docs/releases/`,
+`docs/postmortems/` (owned by this skill). It writes nothing else. The paths
+and the version line come from `reference/versioning.md`, never from a habit.
 
 Resolve the docs home and the version line first (`reference/versioning.md`).
-The changelog heading is the manifest version; a PR body states
-`version: before → after`; release notes copy the changelog section verbatim.
-Never write a version heading the manifest does not carry.
+That file is the single source of truth for the versioning and docs flow: the
+version line the change belongs to, the bump it takes, the changelog it lands
+in, and the docs home the PR uses. Read it and follow it, do not restate it
+here. The changelog heading is the version line the change was bumped on; a PR
+body states `version: before → after`; release notes copy the changelog
+section verbatim. Never write a version heading the version line does not
+carry.
 
 ---
 
@@ -103,7 +107,7 @@ The inputs to apply:
   3. Project context contents (project name, conventions), read `AGENTS.md`, or `CLAUDE.md` fallback, + recent spec paths for the "why"
   4. Output target for the type and today's date
   5. **pr**: the gh action, `none (chat-only)` | `gh pr create` | `gh pr edit` (from the `GH_INSTALLED`/`HAS_REMOTE`/`PR_EXISTS` checks)
-  6. **changelog**: **match the existing `CHANGELOG.md` format** if the file exists (don't impose Keep a Changelog over a different established style)
+  6. **changelog**: **match the existing format of the changelog resolved in `reference/versioning.md`** (don't impose Keep a Changelog over a different established style)
   7. **`release-note`**: the resolved version + range
 
 ### 4. Relay the result
@@ -111,7 +115,7 @@ The inputs to apply:
 Lead with the type and where it landed; for `pr` the body IS the deliverable, so show it in full (per `docs/conventions.md`). Template:
 
 ```
-## /document <pr | changelog | release-note | postmortem> Â· <PR body below | CHANGELOG.md | docs/releases/<v>.md | docs/postmortems/<file> | PR #N updated>
+## /document <pr | changelog | release-note | postmortem> · <PR body below | changelog of the folder worked in | docs/releases/<v>.md | docs/postmortems/<file> | PR #N updated>
 
 <for pr: the title + full body, ready to paste Â· always shown in chat so it works without gh>
 <for the others: a 2 to 3 line preview>

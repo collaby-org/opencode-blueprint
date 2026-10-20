@@ -86,6 +86,12 @@ finished answer — researched, de-duplicated, and verified working together:
 > during multi-project restore sessions drain before the per-directory
 > agent draft is ready — host kills them with
 > `Agent not found: "orchestrator"` (`Failed to drain Session`).
+>
+> The `orchestrator` agent is shipped as a file in `config/agents/` and
+> installed to `~/.config/opencode/agents/`. V2 reads agent markdown from
+> `agents/` (plural); the V1 `agent/` directory is ignored, so a file parked
+> there registers nothing. The file loads with the config, before plugins, so
+> the name exists when a restored session drains.
 
 ### Skills (120) - stack knowledge
 
