@@ -4,7 +4,7 @@
 //   npx opencode-blueprint            # full install
 //   npx opencode-blueprint --dry-run  # print what would happen
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, copyFileSync, cpSync, rmSync, readFileSync, writeFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, copyFileSync, cpSync, rmSync, readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, dirname, delimiter } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -316,6 +316,16 @@ cp(join(REPO, "config", "commands"), join(TARGET, "commands"));
 const sameContent = (a, b) =>
   readFileSync(a, "utf8").replace(/\r\n/g, "\n") === readFileSync(b, "utf8").replace(/\r\n/g, "\n");
 
+// A path that is not a regular file is never read: reading a directory
+// throws, and an installer that dies half way leaves a broken config home.
+const isFile = (p) => {
+  try {
+    return statSync(p).isFile();
+  } catch {
+    return false;
+  }
+};
+
 // Installed per file, copy-if-missing: a tuned agent file survives an
 // install, the same rule the `.env` template follows. A file that differs
 // from the shipped one is kept and backed up, never overwritten.
@@ -327,6 +337,10 @@ for (const entry of readdirSync(agentsSrc, { withFileTypes: true })) {
   const src = join(agentsSrc, entry.name);
   const dest = join(agentsDest, entry.name);
   if (existsSync(dest)) {
+    if (!isFile(dest)) {
+      log(`  keep ${dest} (not a regular file; not ours to replace)`);
+      continue;
+    }
     if (sameContent(dest, src)) {
       log(`  skip ${dest} (already current)`);
     } else {
@@ -348,7 +362,7 @@ if (existsSync(legacyAgentDir)) {
   const shippedAgent = join(agentsSrc, "orchestrator.md");
   const isShippedCopy =
     legacyEntries.length === 1 &&
-    existsSync(legacyFile) &&
+    isFile(legacyFile) &&
     existsSync(shippedAgent) &&
     sameContent(legacyFile, shippedAgent);
   if (isShippedCopy) {

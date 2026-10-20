@@ -278,7 +278,15 @@ function main() {
   // reviewer. No report for it can be missing, so the file count alone would
   // call the review complete. Fail closed instead: the plan has to be rerun
   // with a larger --chunk-tokens.
-  const chunksExceedBudget = plan.chunksExceedBudget === true;
+  //
+  // The condition is derived, not only read from the flag: a plan written
+  // before the flag existed carries no `chunksExceedBudget`, and for that
+  // plan `chunks.length > agents` is exactly the shape of a dropped chunk.
+  const chunksExceedBudget =
+    plan.chunksExceedBudget === true ||
+    (Array.isArray(plan.chunks) &&
+      Number.isFinite(plan.agents) &&
+      plan.chunks.length > plan.agents);
   const complete = all.fileCount >= expected && !chunksExceedBudget;
   const lineSets = parseLineSets(plan);
 
