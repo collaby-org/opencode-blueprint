@@ -430,65 +430,68 @@ const sameContent = (a, b) => {
 
 // A staging directory the host does not scan: the config home's plugins
 // directory is auto-loaded, so a staging directory left there would be read as
-// a plugin. The name is unpredictable and stale entries are swept.
+// a plugin. The name is unpredictable, each directory carries the pid that
+// owns it, and stale entries are swept by age, never by prefix — a second
+// install running now must not lose its staging area.
 const STAGING_ROOT = join(TARGET, ".install-staging");
+const STALE_STAGE_MS = 10 * 60 * 1000;
+const sleepMs = (ms) => {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+};
+const pidAlive = (pid) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error && error.code === "EPERM";
+  }
+};
 const stageDir = (dest) => {
   mkdirSync(STAGING_ROOT, { recursive: true });
-  // Sweep what an earlier run left behind.
   try {
     for (const entry of readdirSync(STAGING_ROOT, { withFileTypes: true })) {
-      if (entry.isDirectory() && entry.name.startsWith("stage-")) {
-        rmSync(join(STAGING_ROOT, entry.name), { recursive: true, force: true });
-      }
+      if (!entry.isDirectory() || !entry.name.startsWith("stage-")) continue;
+      const dir = join(STAGING_ROOT, entry.name);
+      const ownerFile = join(dir, "owner.pid");
+      const owner = Number(readFileSync(ownerFile, "utf8").trim());
+      const age = Date.now() - statSync(dir).mtimeMs;
+      const live = Number.isFinite(owner) && owner > 0 && pidAlive(owner);
+      if (live || age < STALE_STAGE_MS) continue;
+      rmSync(dir, { recursive: true, force: true });
     }
   } catch {
     // Nothing to sweep.
   }
-  return mkdtempSync(join(STAGING_ROOT, "stage-"));
-};
-// Put a staged path in place of the destination with one rename. Renaming over
-// an existing file is atomic on POSIX and on Windows (MoveFileExW with
-// REPLACE_EXISTING), so a reader sees either the old file or the new one and
-// never an absent or half-written one. The two-step swap is the fallback for
-// the case where the direct rename is refused.
-const swapIn = (staged, dest) => {
-  const backup = `${dest}.old-${process.pid}`;
-  let copied = false;
-  if (existsAny(dest)) {
-    // The recovery copy is for the error path only: the direct rename replaces
-    // the destination, and a failed rename leaves this copy to fall back on.
-    try {
-      copyFileSync(dest, backup);
-      copied = true;
-    } catch {
-      // No recovery copy; the fallback below still has the staged file.
-    }
-  }
+  const dir = mkdtempSync(join(STAGING_ROOT, "stage-"));
   try {
-    renameSync(staged, dest);
-  } catch (error) {
-    // The direct rename was refused: fall back to the two-step swap.
-    if (existsAny(dest)) {
-      try {
-        renameSync(dest, `${dest}.moved-${process.pid}`);
-      } catch {
-        // Give up on the fallback.
-      }
-    }
+    writeFileSync(join(dir, "owner.pid"), String(process.pid));
+  } catch {
+    // The owner marker is an optimisation for the sweep, not a requirement.
+  }
+  return dir;
+};
+// Put a staged file in place of the destination with one rename. Renaming over
+// an existing file is atomic on POSIX and on Windows (MoveFileExW with
+// REPLACE_EXISTING), so a reader sees either the old file or the new one.
+//
+// When another process holds the destination open, Windows refuses the rename.
+// The destination is then NEVER renamed away: a reader would see the file
+// missing, and a missing opencode.jsonc takes every plugin, MCP and agent with
+// it. The install retries briefly and, if the file stays busy, leaves the old
+// one in place and says so. A stale config beats an absent one.
+const replaceFile = (staged, dest) => {
+  for (let attempt = 0; attempt < 6; attempt++) {
     try {
       renameSync(staged, dest);
-    } catch {
-      if (copied) {
-        try {
-          renameSync(backup, dest);
-        } catch {
-          // The destination is gone; the staged file is still on disk.
-        }
-      }
-      throw error;
+      return true;
+    } catch (error) {
+      const code = error && error.code;
+      if (code !== "EPERM" && code !== "EBUSY" && code !== "EACCES") throw error;
+      sleepMs(150);
     }
   }
-  if (copied) rmSync(backup, { recursive: true, force: true });
+  log(`  keep ${dest} (busy — the old file is still in place)`);
+  return false;
 };
 // A destination the user put in place is not ours to replace: a link would be
 // destroyed, and a directory where a file belongs would be deleted. The copy
@@ -523,6 +526,25 @@ const guardTreeDest = (dest) => {
   }
   return true;
 };
+// Copy a staged tree over the destination, file by file. The destination
+// stays present the whole time, so a reader never sees it missing — and
+// renaming a directory over another is refused by Windows anyway. A file that
+// upstream removed stays behind: the destination is a superset of the shipped
+// tree, which is also what keeps the user's own files.
+const mergeTree = (src, dest) => {
+  mkdirSync(dest, { recursive: true });
+  for (const entry of readdirSync(src, { withFileTypes: true })) {
+    const from = join(src, entry.name);
+    const to = join(dest, entry.name);
+    if (entry.isDirectory()) {
+      mergeTree(from, to);
+      continue;
+    }
+    if (!entry.isFile()) continue;
+    if (existsAny(to) && !isRegular(to)) continue;
+    copyFileSync(from, to);
+  }
+};
 // Write a file atomically: stage it, then swap it in. A truncate-then-write
 // leaves a window in which the host reads a half written file — and an empty
 // opencode.jsonc takes every plugin, MCP and agent with it.
@@ -541,14 +563,13 @@ const writeAtomic = (from, to) => {
     if (srcSize === 0) {
       log(`  warn: ${from} is empty — ${to} would leave the host without it`);
     }
-    swapIn(tmp, to);
-    return true;
+    return replaceFile(tmp, to);
   } finally {
     rmSync(stage, { recursive: true, force: true });
   }
 };
-// Copy a tree atomically: stage the whole tree, then swap it in. A failed
-// copy leaves the destination in place.
+// Copy a tree: stage the whole tree, then copy it over the destination file by
+// file. A failed copy leaves the destination in place.
 const copyTreeAtomic = (from, to) => {
   if (!guardTreeDest(to)) return false;
   const stage = stageDir(to);
@@ -558,7 +579,7 @@ const copyTreeAtomic = (from, to) => {
     // exception here instead of aborting the process inside the copy.
     readdirSync(from);
     cpSync(from, staged, { recursive: true });
-    swapIn(staged, to);
+    mergeTree(staged, to);
     return true;
   } catch (error) {
     log(`  keep ${to} (cannot be written: ${error && error.code ? error.code : "error"})`);
@@ -578,8 +599,7 @@ const writeTextAtomic = (to, text) => {
   const tmp = join(stage, "file");
   try {
     writeFileSync(tmp, text);
-    swapIn(tmp, to);
-    return true;
+    return replaceFile(tmp, to);
   } finally {
     rmSync(stage, { recursive: true, force: true });
   }
@@ -623,7 +643,16 @@ const mergeDir = (src, dest) => {
     log(`  keep ${dest} (cannot create the directory)`);
     return;
   }
-  for (const entry of readdirSync(src, { withFileTypes: true })) {
+  let entries;
+  try {
+    entries = readdirSync(src, { withFileTypes: true });
+  } catch (error) {
+    // A source the process may not read is reported and skipped: the install
+    // must not die half way through.
+    log(`  keep ${dest} (cannot read ${src}: ${error && error.code ? error.code : "error"})`);
+    return;
+  }
+  for (const entry of entries) {
     const from = join(src, entry.name);
     const to = join(dest, entry.name);
     if (entry.isDirectory()) {
@@ -1206,4 +1235,10 @@ log(`
   4. Restart opencode (config is loaded once at startup).
   5. Per repo: run /pr-agent-setup once (adds PR-Agent Action; set OPENAI_KEY secret).
 `);
-log(DRY ? "DRY RUN — nothing executed." : "Done.");
+// The staging area is scratch space: it does not outlive the run.
+try {
+  rmSync(STAGING_ROOT, { recursive: true, force: true });
+} catch {
+  // Another install may be using it.
+}
+log(DRY ? "DRY RUN - nothing executed." : "Done.");

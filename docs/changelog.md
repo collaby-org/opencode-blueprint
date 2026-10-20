@@ -41,17 +41,20 @@ commit date of the same version.
 
 ### Fixed
 
-- The installer writes every file it owns atomically: it stages the copy
-  outside the directories the host scans and renames it over the destination in
-  one step, so a reader sees either the old file or the new one, never a missing
-  or half-written one. The remove-then-copy, and the plain rewrite the MCP
-  repoint used, left a window in which the host could read an empty
-  `opencode.jsonc` — and an empty config takes every plugin, MCP and agent
-  with it, which is what left the host without `oh-my-opencode-slim` and with
-  two MCPs. A tree whose copy fails now leaves the destination alone, the
-  staging directory is removed when the copy fails, a link or a directory the
-  user put in place is never replaced, and the copy says so when the staged
-  file is short or the source is empty.
+- The installer writes every file it owns without a window in which the host
+  can read a broken one. A file is staged outside the directories the host
+  scans and renamed over the destination in one step; when another process
+  holds the destination open, the install retries briefly and then keeps the
+  old file and reports it — a stale config beats an absent one. A tree is
+  staged whole and copied over the destination file by file, so the
+  destination stays present throughout. The remove-then-copy, and the plain
+  rewrite the MCP repoint used, left a window in which the host could read an
+  empty `opencode.jsonc` — and an empty config takes every plugin, MCP and
+  agent with it, which is what left the host without `oh-my-opencode-slim` and
+  with two MCPs. A tree whose copy fails now leaves the destination alone, the
+  staging area is removed when the run ends, a link or a directory the user
+  put in place is never replaced, and the copy says so when the staged file is
+  short or the source is empty.
 - The hygiene report looks for worktrees on the repository's own drive, not only
   on one fixed letter.
 - The `mindmap` skill no longer tells an agent to publish a page, store a map
