@@ -1,13 +1,13 @@
 ---
 name: code-review
-description: "Run the mandatory local code review before a PR: multiple reviewer agents, always on a model different from the one that wrote the code, confidence gated, chunked for a 200k context window, then synced to the pull request. Use after /check verify and before Kodus, the commit, and the PR."
+description: "Run the mandatory local code review before a PR: multiple reviewer agents, always on a model different from the one that wrote the code, confidence gated, chunked for a 200k context window, then synced to the pull request. Use on the final HEAD, after the rebase, before the PR."
 ---
 
 # Code review
 
 The local gate before a pull request. It is not a suggestion and not a second
-opinion you can skip. It runs on every change, it runs before Kodus, and it
-runs before the PR exists.
+opinion you can skip. It runs on every change, on the final HEAD after the
+rebase, and it runs before the PR exists.
 
 Adapted from Anthropic's `code-review` plugin (several reviewers in parallel, a
 high signal filter, a validation pass before anything is posted) and its
@@ -43,15 +43,18 @@ author grading itself). Reimplemented for a local, small context reviewer.
 ## Order of operations
 
 ```
-/check verify  ->  /code-review  ->  fix valid findings  ->  rerun  ->
-kodus review (local)  ->  commit  ->  push  ->  PR  ->  sync the review  ->
-Kodus + PR-Agent on GitHub  ->  zero comments
+/check verify  ->  kodus review (local, on the staged diff)  ->  commit  ->
+rebase on origin/main  ->  rerun the checks  ->  /code-review on the final
+HEAD  ->  fix valid findings  ->  rerun  ->  push  ->  PR  ->  sync the
+review  ->  Kodus + PR-Agent on GitHub  ->  zero comments
 ```
 
-This order is not optional. A commit before the review means the review is
-reviewing code that already moved. The one exception: a draft PR may be opened
-before the review, because drafts exist for early CI. The plugin gate allows
-drafts and blocks everything else.
+This order is not optional. The gate reads the review artifact and compares
+its head with the current HEAD, so the review has to run on the tree that will
+be pushed: the rebase comes first, the review second, and a change made after
+the review makes the artifact stale. The one exception: a draft PR may be
+opened before the review, because drafts exist for early CI. The plugin gate
+allows drafts and blocks everything else.
 
 The gate has three deliberate escape hatches and no others: a draft PR;
 `enforce_pr_gate: false` in `.opencode/review.json` for a repository that opts
@@ -59,15 +62,12 @@ out; and `CODE_REVIEW_SKIP=1 gh pr create ...`, which exempts exactly the
 command it precedes. The plugin records which one applied in its verdict
 reason, so an ungated creation is always explainable from the log.
 
-The review runs on the working tree, before the commit, so the artifact records
-the HEAD it was built on top of. Committing that same tree as the next commit
-keeps the artifact valid — the gate accepts a review made in `uncommitted` mode
-when its recorded head is `HEAD^`, because the reviewed content is exactly what
-became that commit. So `review -> commit -> PR` needs no second run. Anything
-after that commit does make it stale: a second commit, a rebase, a cherry-pick
-the gate does not recognise. An amend keeps the same parent, so the gate cannot
-see content changes — rerun `/code-review` after an amend that changed anything
-the review covered.
+A commit after the review does not invalidate it by itself: the gate accepts a
+review made in `uncommitted` mode when its recorded head is `HEAD^`, because
+the reviewed content is exactly what became that commit. A second commit, a
+rebase, or a cherry-pick the gate does not recognise does invalidate it. An
+amend keeps the same parent, so the gate cannot see content changes — rerun
+`/code-review` after an amend that changed anything the review covered.
 
 ---
 
@@ -78,8 +78,9 @@ The reviewer must differ from the author. Detect the author first.
 **Author model**, best effort, in this order:
 
 1. The model line in your runtime context (the session model).
-2. `OPENCODE_MODEL` in the environment.
-3. `model` in `opencode.jsonc` or `.opencode/opencode.json`.
+2. `model` in `opencode.jsonc` or `.opencode/opencode.json`.
+3. `OPENCODE_MODEL` in the environment, when the runtime sets it. Nothing in
+   this repository sets it, so treat it as a host hint, not a source of truth.
 4. The human, if the above disagree or are missing.
 
 Do not trust a model's self description alone. It goes stale the moment the
@@ -118,12 +119,33 @@ Rules:
 - The orchestrator stays on the author model. Only reviewer agents get the
   override. Cheap orchestration, expensive review.
 
-The same `review.json` configures the `opencode-review` plugin. Read it, do not
-rewrite it.
+The same `review.json` file is read by the `opencode-review` plugin, but the
+two read different keys: this gate uses `model` and `fallback_models`, that
+plugin uses `language`, `dimensions`, `max_diff_lines` and `trigger`. Read the
+file, do not rewrite it.
 
 ---
 
-## Step 1: plan the review
+## Step 1: Kodus, locally, on the staged diff
+
+Before the commit, on the staged diff:
+
+```
+kodus review --prompt-only --staged --fail-on error
+```
+
+Stage first so the diff is small. Fix valid findings, run the repo checks,
+rerun until it exits 0. The full loop lives in the `kodus-review` skill.
+
+Why here: Kodus reviews the staged diff, so it runs before the commit. The
+cross-model gate reviews the tree that will be pushed, so it runs after the
+rebase. Two reviewers, two different trees, each on the shape it can see.
+
+No Kodus CLI installed: say so and continue. Never fake the result.
+
+---
+
+## Step 2: plan the review
 
 Resolve `SKILL_DIR` to the absolute path of this skill's folder, then run:
 
@@ -158,7 +180,7 @@ fallback.
 
 ---
 
-## Step 2: fan out the reviewers
+## Step 3: fan out the reviewers
 
 Pick the passes from the level:
 
@@ -217,7 +239,7 @@ Rules:
 
 ---
 
-## Step 3: reconcile
+## Step 4: reconcile
 
 ```
 node "<SKILL_DIR>/scripts/reconcile-review.mjs" \
@@ -231,6 +253,11 @@ node "<SKILL_DIR>/scripts/reconcile-review.mjs" \
 It applies the gate (confidence, changed line, dedupe, rank, cap), writes
 `docs/reviews/<date>-<branch>.md`, and writes `result.json` plus
 `.git/code-review/last-result.json`.
+
+Artifact base: `docs/reviews/` by default. When `docs/` is a published docs
+site (`docusaurus.config.*`, `.vitepress/`, `mkdocs.yml`, Astro Starlight,
+Nextra), use `.workflow/reviews/` instead, and follow whichever base already
+exists.
 
 Read the JSON summary: `verdict`, `counts`, `complete`, `agents`, `reportPath`.
 
@@ -246,7 +273,7 @@ rerun. A hand edited result is a fabricated review.
 
 ---
 
-## Step 4: act on the verdict
+## Step 5: act on the verdict
 
 | Verdict | What happens |
 |---|---|
@@ -257,31 +284,12 @@ rerun. A hand edited result is a fabricated review.
 
 The fix loop is separate from the review. Hand the findings file to the
 implementer, let it fix, rerun the repo checks, then rerun `/code-review` from
-Step 1. Maximum two rounds. If round three still has blockers, stop and put the
+Step 2. Maximum two rounds. If round three still has blockers, stop and put the
 finding in front of the human. Do not loop forever, and do not lower the
 threshold to make it pass.
 
 Never fix code inside this skill. The reviewer model must not become the
 author model.
-
----
-
-## Step 5: Kodus, locally, after the review
-
-Only after the review is at `approve` or `approve-with-nits`:
-
-```
-kodus review --prompt-only --staged --fail-on error
-```
-
-Stage first so the diff is small. Fix valid findings, run the repo checks,
-rerun until it exits 0. The full loop lives in the `kodus-review` skill.
-
-Why here, not earlier: Kodus is a second reviewer, not the first. Running it
-before `/code-review` wastes its findings on issues the local gate would have
-caught for free, and the user asked for this order.
-
-No Kodus CLI installed: say so and continue. Never fake the result.
 
 ---
 

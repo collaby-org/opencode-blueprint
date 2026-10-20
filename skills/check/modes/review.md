@@ -2,7 +2,7 @@
 
 The `review` mode of `/check`: a senior code review, before merge, on a different model than wrote the code. Follow it fully.
 
-This is the quick single pass. The mandatory, chunked, multi agent gate that blocks the PR lives in the `code-review` skill (`/code-review`); run that first, before Kodus and before commit. Do not duplicate its rubric here.
+This is the quick single pass. The mandatory, chunked, multi agent gate that blocks the PR lives in the `code-review` skill (`/code-review`); it runs on the final HEAD, after the rebase, and the gate refuses `gh pr create` without it. This mode never replaces that gate, and it does not duplicate its rubric.
 
 ## What this skill does
 
@@ -43,7 +43,7 @@ Any Agent Skills client on macOS, Linux, or Windows:
 
 The one rule that never bends: the reviewer runs on a different model family from the author. The ladder of reviewer models and the review rules live in the `code-review` skill (`skills/code-review/SKILL.md`); this mode never defines its own. Read that file and use its ladder and its rules.
 
-**Author model.** The author model is whatever this session runs on. There is no in-session switch: the only supported way to review on another model is to spawn the reviewer on it. Detect it best effort, in this order: the model line in your runtime context, `OPENCODE_MODEL` in the environment, then `model` in `opencode.jsonc` or `.opencode/opencode.json`. Do not rely on a model's self description alone, it goes stale the moment the model is switched and it may be wrong. If detection is ambiguous, ask exactly one question and offer the detected value as the default:
+**Author model.** The author model is whatever this session runs on. There is no in-session switch: the only supported way to review on another model is to spawn the reviewer on it. Detect it best effort, in the order the `code-review` skill defines (Step 0): the model line in your runtime context, then `model` in `opencode.jsonc` or `.opencode/opencode.json`, then a host hint such as `OPENCODE_MODEL`. Do not rely on a model's self description alone, it goes stale the moment the model is switched and it may be wrong. If detection is ambiguous, ask exactly one question and offer the detected value as the default:
 
 ```
 "Which model wrote this code? I'll review on a different one."
