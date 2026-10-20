@@ -1,0 +1,4 @@
+# CODEOWNERS decides who reviews what. The single rule below covers every file.
+# If the owner still reads TODO, replace it with a real user or team before
+# merge: a CODEOWNERS file that names nobody valid silently asks nobody.
+* @collaby-org

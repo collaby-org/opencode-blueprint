@@ -37,6 +37,8 @@ Every choice is an options panel, never a neutral menu: 2 to 4 concrete options 
 
 `docs/scope/` is the feature scope, owned by this skill; `/architect` owns `docs/specs/`. Other skills find a feature by scanning `docs/scope/` for its row. Living document: `plan`, `replan`, `add` all edit in place (reconcile and append, never a new dated file). Writes nothing else: no specs, code, or `AGENTS.md`. `docs/scope/` holds scope files only; inventories, analyses, research docs live with the spec in its `rationale.md` (owned by `/architect`).
 
+Resolve the docs home and the version line before planning (`document` skill, `reference/versioning.md`). Record the target version for the work (`1.3.0`) on the scope header. The first change opens that minor; each change after it bumps the patch while the PR is open.
+
 File shape:
 - Small product: one file, `docs/scope/scope.md` (At a glance table + phase grouped sections + legend).
 - Large product: epic split: `docs/scope/index.md` (At a glance table across epics + one line status rollup per epic, each linking its epic file) + one file per epic named by area (`docs/scope/auth.md`, …).

@@ -6,19 +6,30 @@ the last releases delivered.
 
 ## Open
 
-- [ ] Release the pinned local MCP installs. The working tree installs
-  `prisma@7.10.1`, `@modelcontextprotocol/server-postgres@0.6.2`,
-  `mongodb-mcp-server@3.1.0`, `kubernetes-mcp-server@0.0.67` and
-  `analytics-mcp==0.7.0` into the config home `tools/` folder and repoints
-  every local MCP entry at the machine local copy. Released 1.2.6 still
-  leaves five of them on `npx` and `pipx run`. Done when a tag exists whose
-  installer resolves all seven local entries to paths that exist.
-- [ ] Release the rest of the working tree in the same version: the Node
+- [x] Release the pinned local MCP installs. Shipped in 1.2.7.
+- [x] Release the rest of the working tree in the same version: the Node
   >= 22.20 floor for the skills step, the `metadata.opencode/autoinvoke:
   "false"` mirror for the 11 user invoked skills, the three added skill
   sources `cathrynlavery/diagram-design`, `heygen-com/hyperframes` and
   `mattpocock/skills`, and the skill count corrected from 94 to 119 in the
-  `package.json` description.
+  `package.json` description. Shipped in 1.2.7.
+- [ ] Release the local code review gate and the versioned docs flow as 1.4.0:
+  the `code-review` skill, the `opencode-code-review` plugin, the two GitHub
+  workflows, the `AGENTS.md` docs/version rules, the `repo-standards`
+  scaffold, the slim `AGENTS.md` and the skill updates are in the working
+  tree. Done when the tag exists, a fresh install loads the plugin
+  (`/code-review` present, `gh pr create` gated), the agent file lands in
+  `~/.config/opencode/agents/` and the docs rule is enforced on the next
+  project.
+- [ ] Confirm the standards flow on a repository outside this one.
+  `standards.mjs --check` must pass on a project that already carries the
+  baseline, and a second `--apply` must change nothing. Done when a project
+  outside this repository passes the check and keeps its curated files.
+- [ ] Arm the GitHub side gates. `.github/workflows/kodus.yml` and
+  `.github/workflows/pr-agent.yml` skip their review step while
+  `KODUS_TEAM_KEY` and `LLM_API_KEY` are absent, so nothing goes red before
+  the repo is configured. Done when both secrets exist and one pull request
+  shows both checks running green.
 - [ ] Add a `files` allowlist to `package.json`. The README no longer claims
   `files` hygiene, but npm still ships the whole tree except the paths in
   `.gitignore`, which includes the vendored plugin `dist/` trees.

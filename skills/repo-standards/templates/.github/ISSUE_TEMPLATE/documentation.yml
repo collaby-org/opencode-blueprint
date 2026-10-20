@@ -1,0 +1,35 @@
+name: Documentation
+description: Report a gap, an error, or an unclear passage in the docs.
+title: "[docs]: "
+labels: ["documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Never paste `.env` files, tokens, keys, passwords, or customer data.
+        Quote the passage and say what is wrong with it. Security problems go
+        through the private channel in `.github/SECURITY.md`, not here.
+
+  - type: input
+    id: location
+    attributes:
+      label: Where is the problem
+      description: File path, section heading, or URL.
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is wrong
+      description: Missing, incorrect, outdated, or hard to follow. Quote the text when you can.
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested fix
+      description: The correction or the missing content, if you have it.
+    validations:
+      required: false

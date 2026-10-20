@@ -11,6 +11,8 @@ Six files in `docs/`, kept accurate against the real codebase. Stale docs are a 
 
 - **Single-repo:** root `docs/` (`docs/changelog.md`, etc.).
 - **Monorepo:** root `docs/` for shared decisions plus per-app `docs/` following the actual repo layout (e.g. `docs/` + `apps/frontend/docs/`). Follow the repo shape — never force an example path.
+- **Existing documentation tree:** `Documentation/`, `Obsidian-Documentation*`, `.docs/`, or a linked docs repo/vault is the docs home when `docs/` is absent. Write there, not in a new folder beside it. A separate vault still ships its change with the PR.
+- **Published site:** when `docs/` is a Docusaurus, VitePress, MkDocs, Starlight or Nextra site, workflow records go in `.workflow/` — the same base `/scope`, `/architect` and `/develop` use.
 
 ## Entry Modes
 
@@ -48,8 +50,17 @@ Pick one per task:
 
 ## Versions
 
-- Fix → patch, feature → minor, breaking → major.
-- Multi-app: version and changelog each app independently — bump only the app(s) that changed, and record the bump in that app's `changelog.md`.
+- Source: the project manifest (`package.json`, `composer.json`,
+  `pyproject.toml`, `*.csproj`, …) or `docs/VERSION`; no version → `1.0.0`.
+- Fix → patch, feature → minor, breaking → major. A PR opens its minor (or
+  patch for a fix PR); every change while it is open bumps the patch, so the PR
+  lands at the highest patch (`1.3.35`). The next PR opens `1.4.0`.
+- Bump the manifest and write the changelog line in the same commit as the
+  change. Never a separate bump commit at the end.
+- Multi-app: version and changelog each app independently — bump only the
+  app(s) that changed, and record the bump in that app's `changelog.md`.
+- External vault: mirror after the repo copy exists; it is never the only
+  record. Full protocol in the `document` skill, `reference/versioning.md`.
 
 ## Remember
 

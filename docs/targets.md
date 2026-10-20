@@ -22,7 +22,12 @@ outside this repository has to move first.
 - [done] Files that may hold user values are copied only when missing:
   `.env.example` and `oh-my-opencode-slim.jsonc`.
 - [done] Files that are versioned content are overwritten: `opencode.jsonc`,
-  `AGENTS.md`, `commands/`, `plugins/` and the vendored skills.
+  `AGENTS.md` and `plugins/`.
+- [done] Directories that hold shipped files and user files are merged, each in
+  its own way: a missing shipped command is written, a command the user changed
+  is kept and backed up, and a command the installer did not put there is never
+  removed; in the vendored skills the shipped files are versioned content and
+  are replaced, while a file the user added is kept.
 - [open] Every local MCP entry points at a path that exists on the installing
   machine. The working tree installs and repoints all seven local servers;
   the released 1.2.6 only repointed `redis` and `rea`.

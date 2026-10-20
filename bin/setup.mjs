@@ -4,7 +4,7 @@
 //   npx opencode-blueprint            # full install
 //   npx opencode-blueprint --dry-run  # print what would happen
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, copyFileSync, cpSync, rmSync, readFileSync, writeFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, copyFileSync, cpSync, rmSync, readFileSync, writeFileSync, readdirSync, lstatSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, dirname, delimiter } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,11 +17,44 @@ const TARGET =
 const SKILLS_DIR = join(homedir(), ".agents", "skills");
 
 const log = (m) => console.log(m);
+// A path that is not a regular file is never read or written: reading a
+// directory throws, and writing through a link would put the file outside
+// the config home. An installer that dies half way leaves a broken config
+// home, and a link is not ours to replace either.
+const isRegular = (p) => {
+  try {
+    const stat = lstatSync(p);
+    return stat.isFile() && !stat.isSymbolicLink();
+  } catch {
+    return false;
+  }
+};
+// A dangling link is a path that exists even though it resolves to nothing,
+// so existsSync() (which follows the link) says false. The destination checks
+// ask the path itself.
+const existsAny = (p) => {
+  try {
+    lstatSync(p);
+    return true;
+  } catch {
+    return false;
+  }
+};
 // Windows .cmd/.ps1 shims (npx, npm, kodus) need a shell to spawn.
 const SHELL = process.platform === "win32";
 const run = (cmd, args, opts = {}) => {
   log(`$ ${cmd} ${args.join(" ")}`);
-  if (!DRY) execFileSync(cmd, args, { stdio: "inherit", shell: SHELL, ...opts });
+  if (DRY) return true;
+  try {
+    execFileSync(cmd, args, { stdio: "inherit", shell: SHELL, ...opts });
+    return true;
+  } catch (error) {
+    // A step that fails (a network hiccup, a locked file, a path that is not a
+    // directory) is reported and skipped. The installer keeps going and says
+    // what it could not do; it does not die half way.
+    log(`  keep ${cmd} ${args.join(" ")} (failed: ${error && error.status ? `exit ${error.status}` : "see above"})`);
+    return false;
+  }
 };
 const has = (cmd) => {
   try {
@@ -36,7 +69,14 @@ const has = (cmd) => {
 // spaces in the path. execFileSync with an absolute path skips the shell.
 const runAbs = (exe, args) => {
   log(`$ ${exe} ${args.join(" ")}`);
-  if (!DRY) execFileSync(exe, args, { stdio: "inherit" });
+  if (DRY) return true;
+  try {
+    execFileSync(exe, args, { stdio: "inherit" });
+    return true;
+  } catch (error) {
+    log(`  keep ${exe} ${args.join(" ")} (failed: ${error && error.status ? `exit ${error.status}` : "see above"})`);
+    return false;
+  }
 };
 
 // ------------------------------------------------------- node runtime probe
@@ -81,7 +121,7 @@ const nodeCandidates = () => {
   const localAppData = process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local");
   const nvmRoot = join(localAppData, "nvm");
   if (existsSync(nvmRoot)) {
-    for (const entry of readdirSync(nvmRoot, { withFileTypes: true })) {
+    for (const entry of readDirSafe(nvmRoot)) {
       if (entry.isDirectory()) add(join(nvmRoot, entry.name, "node.exe"));
     }
   }
@@ -191,7 +231,15 @@ const AUTOINVOKE_VALUE = '"false"';
 // not-user-invoked | already-patched | patched | would-patch | unsupported
 const patchAutoinvoke = (file) => {
   if (!existsSync(file)) return "missing";
-  const text = readFileSync(file, "utf8");
+  let text;
+  try {
+    if (!isRegular(file)) return "unsupported";
+    text = readFileSync(file, "utf8");
+  } catch {
+    // A skill file that cannot be read (a directory, a locked file) is left
+    // alone: the mirror is cosmetic, never worth an aborted install.
+    return "unsupported";
+  }
   const fm = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!fm) return "no-frontmatter";
   const lines = fm[1].split(/\r?\n/);
@@ -248,7 +296,15 @@ const patchAutoinvoke = (file) => {
   const tail = text.slice(fm[0].length);
   const patched = `${head}${next.join(eol)}${eol}---${tail}`;
   if (patched === text) return "already-patched";
-  if (!DRY) writeFileSync(file, patched);
+  if (!DRY) {
+    try {
+      writeFileSync(file, patched);
+    } catch {
+      // A read-only or locked skill file keeps its content: the mirror is
+      // cosmetic, never worth an aborted install.
+      return "unsupported";
+    }
+  }
   return DRY ? "would-patch" : "patched";
 };
 
@@ -287,32 +343,291 @@ for (const c of ["gh", "python", "pipx"]) if (!has(c)) log(`  warn: ${c} not fou
 log("  ok");
 
 log("== 2/6 config files ==");
-mkdirSync(TARGET, { recursive: true });
-mkdirSync(join(TARGET, "commands"), { recursive: true });
-mkdirSync(join(TARGET, "plugins"), { recursive: true });
+// A directory that cannot be created (a link, a path that is a file, a locked
+// entry) is not ours to replace: skip it with a log instead of aborting the
+// install half way.
+const ensureDir = (dir) => {
+  try {
+    mkdirSync(dir, { recursive: true });
+    return true;
+  } catch {
+    log(`  keep ${dir} (cannot create the directory)`);
+    return false;
+  }
+};
+// Whether the directory can hold the shipped files: a link or a file in the
+// way cannot, and a path that does not exist yet can.
+const dirReady = (dir) => {
+  try {
+    const stat = lstatSync(dir);
+    if (stat.isSymbolicLink()) return false;
+    return stat.isDirectory();
+  } catch {
+    return true;
+  }
+};
+// Every filesystem operation that can fail on a path the user owns is wrapped:
+// the installer keeps going and says what it skipped, instead of dying with a
+// half installed config home.
+const rmSafe = (p) => {
+  try {
+    rmSync(p, { recursive: true, force: true });
+    return true;
+  } catch {
+    log(`  keep ${p} (cannot be removed)`);
+    return false;
+  }
+};
+const readDirSafe = (dir) => {
+  try {
+    if (!lstatSync(dir).isDirectory()) return [];
+    return readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+};
+const readTextSafe = (p) => {
+  try {
+    if (!isRegular(p)) return null;
+    return readFileSync(p, "utf8");
+  } catch {
+    return null;
+  }
+};
+ensureDir(TARGET);
+ensureDir(join(TARGET, "commands"));
+ensureDir(join(TARGET, "plugins"));
 const backup = (p) => {
-  if (existsSync(p) && !DRY) copyFileSync(p, `${p}.bak-${Date.now()}`);
+  // A directory or a locked file cannot be copied: the backup is skipped and
+  // the install continues.
+  if (DRY || !isRegular(p)) return false;
+  try {
+    copyFileSync(p, `${p}.bak-${Date.now()}`);
+    return true;
+  } catch {
+    log(`  keep ${p} (cannot be backed up)`);
+    return false;
+  }
 };
 backup(join(TARGET, "opencode.jsonc"));
 backup(join(TARGET, "AGENTS.md"));
+// Content comparison that ignores line endings: a Windows checkout can turn
+// LF into CRLF, and that is not a user edit.
+const sameContent = (a, b) => {
+  try {
+    return (
+      readFileSync(a, "utf8").replace(/\r\n/g, "\n") ===
+      readFileSync(b, "utf8").replace(/\r\n/g, "\n")
+    );
+  } catch {
+    // A file that cannot be read (locked, deleted between the check and the
+    // read) is not identical to anything: it is kept, not fatal.
+    return false;
+  }
+};
+
+// Copy a file, and never let one bad destination abort the install.
+const copyOrKeep = (from, to) => {
+  try {
+    copyFileSync(from, to);
+    return true;
+  } catch {
+    log(`  keep ${to} (cannot be written)`);
+    return false;
+  }
+};
+// Copy a tree over another one, file by file, without deleting what is
+// already there.
+const mergeDir = (src, dest) => {
+  // A destination that is a link is not ours to write through: the copy would
+  // land outside the config home. A destination that exists as a regular file
+  // cannot hold the shipped directory either: creating it would throw and
+  // abort the install half way.
+  let destStat = null;
+  try {
+    destStat = lstatSync(dest);
+  } catch {
+    destStat = null;
+  }
+  if (destStat && destStat.isSymbolicLink()) {
+    log(`  keep ${dest} (a link; not ours to write through)`);
+    return;
+  }
+  if (destStat && isRegular(dest)) {
+    log(`  keep ${dest} (you have a file where the shipped tree needs a directory)`);
+    return;
+  }
+  try {
+    mkdirSync(dest, { recursive: true });
+  } catch {
+    // A path that cannot become a directory (a link, a locked entry) is not
+    // ours to replace: skip it instead of aborting the install.
+    log(`  keep ${dest} (cannot create the directory)`);
+    return;
+  }
+  for (const entry of readdirSync(src, { withFileTypes: true })) {
+    const from = join(src, entry.name);
+    const to = join(dest, entry.name);
+    if (entry.isDirectory()) {
+      mergeDir(from, to);
+      continue;
+    }
+    if (!entry.isFile()) continue;
+    // A destination that is not a regular file is never written: copying into
+    // it throws, and one bad entry must not abort the whole install.
+    if (existsAny(to) && !isRegular(to)) {
+      log(`  keep ${to} (not a regular file; not ours to replace)`);
+      continue;
+    }
+    copyOrKeep(from, to);
+  }
+};
 const cp = (src, dest) => {
   log(`  copy ${src} -> ${dest}`);
   if (!DRY) {
-    if (existsSync(dest)) rmSync(dest, { recursive: true, force: true });
-    cpSync(src, dest, { recursive: true });
+    if (existsAny(dest)) {
+      // A link is not ours to replace: copying through it would write outside
+      // the config home.
+      try {
+        if (lstatSync(dest).isSymbolicLink()) {
+          log(`  keep ${dest} (a link; not ours to replace)`);
+          return;
+        }
+      } catch {
+        // Fall through to the copy.
+      }
+      rmSafe(dest);
+    }
+    try {
+      cpSync(src, dest, { recursive: true });
+    } catch {
+      log(`  keep ${dest} (cannot be written)`);
+    }
   }
 };
 cp(join(REPO, "config", "opencode.jsonc"), join(TARGET, "opencode.jsonc"));
 cp(join(REPO, "AGENTS.md"), join(TARGET, "AGENTS.md"));
-cp(join(REPO, "config", "commands"), join(TARGET, "commands"));
-cp(join(REPO, "config", "plugins", "opencode-review"), join(TARGET, "plugins", "opencode-review"));
-cp(join(REPO, "config", "plugins", "opencode-dcp"), join(TARGET, "plugins", "opencode-dcp"));
-cp(join(REPO, "config", "plugins", "opencode-github-release"), join(TARGET, "plugins", "opencode-github-release"));
-cp(join(REPO, "config", "plugins", "opencode-telemetry"), join(TARGET, "plugins", "opencode-telemetry"));
-cp(join(REPO, "config", "plugins", "envsitter-guard"), join(TARGET, "plugins", "envsitter-guard"));
-cp(join(REPO, "config", "plugins", "opencode-log-sanitizer"), join(TARGET, "plugins", "opencode-log-sanitizer"));
-cp(join(REPO, "config", "plugins", "opencode-command-inject"), join(TARGET, "plugins", "opencode-command-inject"));
-cp(join(REPO, "config", "plugins", "opencode-ralph-wiggum"), join(TARGET, "plugins", "opencode-ralph-wiggum"));
+// The commands directory holds the shipped commands and the ones the user
+// wrote. Copy the shipped ones that are missing, keep a tuned file with a
+// backup, and never remove a file this installer did not put there.
+const cpDirIfMissing = (src, dest) => {
+  log(`  copy ${src} -> ${dest} (missing files only)`);
+  if (!dirReady(dest)) {
+    log(`  keep ${dest} (cannot create the directory)`);
+    return;
+  }
+  if (!DRY && !ensureDir(dest)) return;
+  for (const entry of readdirSync(src, { withFileTypes: true })) {
+    if (!entry.isFile()) continue;
+    const from = join(src, entry.name);
+    const to = join(dest, entry.name);
+    if (!existsAny(to)) {
+      log(`  copy ${from} -> ${to}`);
+      if (!DRY) copyOrKeep(from, to);
+      continue;
+    }
+    if (!isRegular(to)) {
+      log(`  keep ${to} (not a regular file; not ours to replace)`);
+      continue;
+    }
+    if (sameContent(to, from)) {
+      log(`  skip ${to} (already current)`);
+      continue;
+    }
+    backup(to);
+    log(`  keep ${to} (you changed it; backed up, not overwritten)`);
+  }
+};
+cpDirIfMissing(join(REPO, "config", "commands"), join(TARGET, "commands"));
+// The orchestrator agent is a file, not a slim default: with
+// setDefaultAgent=false slim no longer registers the name, and sessions or
+// task sessions that still reference it fail to drain with `Agent not found`.
+// V2 reads agent markdown from `agents/` (plural); the v1 `agent/` directory
+// is ignored, which is why the file used to be missing at runtime.
+// Installed per file, copy-if-missing: a tuned agent file survives an
+// install, the same rule the `.env` template follows. A file that differs
+// from the shipped one is kept and backed up, never overwritten.
+const agentsSrc = join(REPO, "config", "agents");
+const agentsDest = join(TARGET, "agents");
+const agentsDirReady = dirReady(agentsDest);
+if (agentsDirReady && !DRY) ensureDir(agentsDest);
+for (const entry of readdirSync(agentsSrc, { withFileTypes: true })) {
+  if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+  if (!agentsDirReady) {
+    log(`  skip ${join(agentsDest, entry.name)} (the agents directory could not be created)`);
+    continue;
+  }
+  const src = join(agentsSrc, entry.name);
+  const dest = join(agentsDest, entry.name);
+  if (existsAny(dest)) {
+    if (!isRegular(dest)) {
+      log(`  keep ${dest} (not a regular file; not ours to replace)`);
+      continue;
+    }
+    if (sameContent(dest, src)) {
+      log(`  skip ${dest} (already current)`);
+    } else {
+      backup(dest);
+      log(`  keep ${dest} (you changed it; backed up, not overwritten — delete it to take the shipped one)`);
+    }
+    continue;
+  }
+  log(`  copy ${src} -> ${dest}`);
+  if (!DRY) copyOrKeep(src, dest);
+}
+// The V1 `agent/` directory is ignored by V2. Remove it only when it holds
+// nothing but the exact file this installer shipped; anything else belongs to
+// the user and is left alone.
+const legacyAgentDir = join(TARGET, "agent");
+if (existsAny(legacyAgentDir)) {
+  const legacyEntries = readDirSafe(legacyAgentDir);
+  const legacyFile = join(legacyAgentDir, "orchestrator.md");
+  const shippedAgent = join(agentsSrc, "orchestrator.md");
+  const isShippedCopy =
+    legacyEntries.length === 1 &&
+    isRegular(legacyFile) &&
+    existsSync(shippedAgent) &&
+    sameContent(legacyFile, shippedAgent);
+  if (isShippedCopy) {
+    rmSafe(legacyAgentDir);
+    log(`  removed ${legacyAgentDir} (V2 reads agents/)`);
+  } else {
+    log(`  keep ${legacyAgentDir} (not the file this installer shipped; V2 ignores it, remove it yourself)`);
+  }
+}
+// The plugins directory is a plain copy, but a link or a file in the way must
+// not be written through.
+const pluginsDir = join(TARGET, "plugins");
+const pluginsDirReady = dirReady(pluginsDir);
+if (!pluginsDirReady) log(`  keep ${pluginsDir} (a link or a file; not ours to write through)`);
+for (const plugin of [
+  "opencode-review",
+  "opencode-code-review",
+  "opencode-dcp",
+  "opencode-github-release",
+  "opencode-telemetry",
+  "envsitter-guard",
+  "opencode-log-sanitizer",
+  "opencode-command-inject",
+  "opencode-ralph-wiggum",
+  "opencode-mem",
+]) {
+  if (!pluginsDirReady) {
+    log(`  skip ${join(pluginsDir, plugin)} (the plugins directory is not ours to write into)`);
+    continue;
+  }
+  cp(join(REPO, "config", "plugins", plugin), join(pluginsDir, plugin));
+}
+// mcp-env wrapper: loads <config>/.env and expands {env:...} for local MCP
+// servers, because OpenCode's own expansion reads only its process
+// environment. Without it DATABASE_URL / REDIS_URL arrive empty.
+const toolsDir = join(TARGET, "tools");
+const toolsDirReady = dirReady(toolsDir);
+if (!toolsDirReady) log(`  keep ${toolsDir} (a link or a file; not ours to write through)`);
+else {
+  if (!DRY) ensureDir(toolsDir);
+  cp(join(REPO, "config", "tools", "mcp-env.mjs"), join(toolsDir, "mcp-env.mjs"));
+}
 // Copy .env.example as a starter template only — never overwrite an existing
 // (possibly filled-in) .env.example in TARGET.
 const envExampleDest = join(TARGET, ".env.example");
@@ -321,11 +636,10 @@ if (!existsSync(envExampleDest)) {
 } else {
   log(`  skip ${envExampleDest} (already exists — not overwriting filled template)`);
 }
-// Create the .env the {env:...} placeholders expand from. Without it
-// DATABASE_URL / REDIS_URL / MDB_MCP_CONNECTION_STRING expand to an empty
-// string and those MCPs die at startup (postgres: `new URL('')`). Copy the
-// template if missing — never overwrite an existing .env, it holds real
-// credentials.
+// Create the .env the mcp-env wrapper reads. Without it DATABASE_URL /
+// REDIS_URL / MDB_MCP_CONNECTION_STRING are missing and those MCPs die at
+// startup (postgres: `new URL('')`). Copy the template if missing — never
+// overwrite an existing .env, it holds real credentials.
 const envDest = join(TARGET, ".env");
 if (!existsSync(envDest)) {
   cp(join(REPO, "config", ".env.example"), envDest);
@@ -344,35 +658,72 @@ if (!existsSync(slimCfgDest)) {
   log(`  skip ${slimCfgDest} (already exists — not overwriting user config)`);
 }
 
-log("== 3/6 local plugin deps (review, dcp + 6 ports) ==");
-run("npm", ["install", "--prefix", join(TARGET, "plugins", "opencode-review"), "@opencode-ai/plugin"]);
-// opencode-dcp is a vendored npm tree (deps pinned in its package.json):
-// production-only install. --legacy-peer-deps works around an upstream
-// dev-tree conflict (dev @opencode/plugin wants @opentui/core >=0.5.14
-// while the package pins ^0.4.5); --omit=dev keeps the 0.4.x runtime the
-// TUI entry was built against. No version upgrades beyond the pins.
-run("npm", ["install", "--prefix", join(TARGET, "plugins", "opencode-dcp"), "--omit=dev", "--legacy-peer-deps", "--no-audit", "--no-fund"]);
-// Ported plugins (deps pinned in each package.json) — same production flags.
-for (const name of ["opencode-github-release", "opencode-telemetry", "envsitter-guard", "opencode-log-sanitizer", "opencode-command-inject", "opencode-ralph-wiggum"]) {
-  run("npm", ["install", "--prefix", join(TARGET, "plugins", name), "--omit=dev", "--legacy-peer-deps", "--no-audit", "--no-fund"]);
+log("== 3/6 local plugin deps (review, code-review, mem, dcp + 6 ports) ==");
+// The dependency installs write into the plugin directories: when the plugins
+// directory is a link or a file, npm would create it and write outside the
+// config home, so the step is skipped instead.
+const pluginPrefix = (dir) => join(TARGET, "plugins", dir);
+if (!pluginsDirReady) {
+  log(`  skip the plugin dependencies (${pluginsDir} is not ours to write into)`);
+} else {
+  run("npm", ["install", "--prefix", pluginPrefix("opencode-review"), "@opencode-ai/plugin"]);
+  // opencode-dcp is a vendored npm tree (deps pinned in its package.json):
+  // production-only install. --legacy-peer-deps works around an upstream
+  // dev-tree conflict (dev @opencode/plugin wants @opentui/core >=0.5.14
+  // while the package pins ^0.4.5); --omit=dev keeps the 0.4.x runtime the
+  // TUI entry was built against. No version upgrades beyond the pins.
+  run("npm", ["install", "--prefix", pluginPrefix("opencode-dcp"), "--omit=dev", "--legacy-peer-deps", "--no-audit", "--no-fund"]);
+  // Ported plugins (deps pinned in each package.json) — same production flags.
+  // opencode-mem is NOT here: it installs into the config home, because the Bun
+  // loader resolves bare imports up to TARGET/node_modules, not from the plugin
+  // directory. A local tree there is invisible to the loader (and 864 MB of
+  // duplicated dependencies).
+  for (const name of ["opencode-github-release", "opencode-telemetry", "envsitter-guard", "opencode-log-sanitizer", "opencode-command-inject", "opencode-ralph-wiggum", "opencode-code-review"]) {
+    run("npm", ["install", "--prefix", pluginPrefix(name), "--omit=dev", "--legacy-peer-deps", "--no-audit", "--no-fund"]);
+  }
 }
-// Central fallback dep: the Bun loader walks bare imports up to
+// Central fallback deps: the Bun loader walks bare imports up to
 // TARGET/node_modules, so the central copy must expose ./v2/promise
-// (>=1.18.29). Merge into TARGET/package.json (never overwrite other keys),
-// then install. Without this, path plugins fall back to a stale central
-// copy and fail with "Cannot find package".
+// (>=1.18.29). opencode-mem is here for the same reason — its own tree inside
+// plugins/opencode-mem is never consulted. Merge into TARGET/package.json
+// (never overwrite other keys), then install. Without this, path plugins fall
+// back to a stale central copy and fail with "Cannot find package".
 const centralPkgPath = join(TARGET, "package.json");
 let centralPkg = {};
-if (existsSync(centralPkgPath)) {
-  centralPkg = JSON.parse(readFileSync(centralPkgPath, "utf8"));
+const centralPkgText = readTextSafe(centralPkgPath);
+if (centralPkgText !== null) {
+  try {
+    centralPkg = JSON.parse(centralPkgText);
+  } catch {
+    log(`  keep ${centralPkgPath} (not valid JSON; the dependencies are not merged)`);
+    centralPkg = {};
+  }
+} else if (existsAny(centralPkgPath)) {
+  log(`  keep ${centralPkgPath} (not a regular file; the dependencies are not merged)`);
 }
-centralPkg.dependencies = { ...(centralPkg.dependencies || {}), "@opencode-ai/plugin": "^1.19.1" };
-if (!DRY) writeFileSync(centralPkgPath, JSON.stringify(centralPkg, null, 2) + "\n");
-else log(`  write ${centralPkgPath} (merge @opencode-ai/plugin into dependencies)`);
+centralPkg.dependencies = {
+  ...(centralPkg.dependencies || {}),
+  "@opencode-ai/plugin": "^1.19.1",
+  "opencode-mem": "2.32.0",
+};
+if (!DRY) {
+  try {
+    writeFileSync(centralPkgPath, JSON.stringify(centralPkg, null, 2) + "\n");
+  } catch {
+    log(`  keep ${centralPkgPath} (cannot be written)`);
+  }
+} else log(`  write ${centralPkgPath} (merge @opencode-ai/plugin into dependencies)`);
 run("npm", ["install", "--prefix", TARGET, "--no-audit", "--no-fund"]);
 
 log("== 4/6 skills (global, agent=opencode) ==");
-mkdirSync(SKILLS_DIR, { recursive: true });
+let skillsRootReady = dirReady(SKILLS_DIR);
+if (skillsRootReady) {
+  // ensureDir owns the creation: a path that cannot become a directory (a
+  // link, an ancestor that is a file) is kept, not fatal.
+  skillsRootReady = ensureDir(SKILLS_DIR);
+} else {
+  log(`  keep ${SKILLS_DIR} (a link or a file; the global skills are not installed)`);
+}
 // `npx` resolves `node` from PATH, so a machine-wide Node 20 makes the
 // skills CLI (which needs Node >= 22.20 for fs/promises.glob) crash on EVERY
 // entry. Resolve a newer runtime and put its directory FIRST on PATH for the
@@ -392,6 +743,10 @@ const skillsPath = process.env.PATH || "";
 process.env.PATH = `${dirname(skillsNode.exe)}${delimiter}${skillsPath}`;
 try {
   for (const [repo, skills] of SKILLS) {
+    if (!skillsRootReady) {
+      log(`  skip ${repo} (the global skills directory is not ours to write into)`);
+      continue;
+    }
     const args = ["-y", "skills", "add", repo];
     for (const s of skills) args.push("-s", s);
     args.push("-a", "opencode", "-g", "-y");
@@ -406,20 +761,28 @@ for (const name of AUTOINVOKE_SKILLS) {
   log(`  autoinvoke ${name} -> ${patchAutoinvoke(join(SKILLS_DIR, name, "SKILL.md"))}`);
 }
 // Vendored local/workflow skills (skills/ in this repo) — cannot be installed
-// via `skills add`, copied verbatim. Overwrite is correct (versioned content,
-// unlike .env.example above).
-const VENDORED_SKILLS = ["architect", "audit", "check", "debug", "design-system", "develop", "document", "kodus-review", "living-docs", "opencode-github", "pr-agent", "scope", "ship", "sync", "test", "write-swift"];
+// via `skills add`. The shipped tree is merged over the installed one: the
+// versioned files are replaced, a file the user added is kept, and a file the
+// user changed in a shipped one is replaced like the rest of the versioned
+// content (unlike .env.example above).
+const VENDORED_SKILLS = ["architect", "audit", "check", "code-review", "debug", "design-system", "develop", "document", "kodus-review", "living-docs", "opencode-github", "pr-agent", "repo-standards", "scope", "ship", "skill-routing", "sync", "test", "write-swift"];
 for (const name of VENDORED_SKILLS) {
   const src = join(REPO, "skills", name);
   const dest = join(SKILLS_DIR, name);
+  if (!skillsRootReady) {
+    log(`  skip skills/${name} (the global skills directory is not ours to write into)`);
+    continue;
+  }
   if (!existsSync(src)) {
     log(`  skip skills/${name} (not in repo skills/)`);
     continue;
   }
   log(`  copy skills/${name} -> ${dest}`);
   if (!DRY) {
-    if (existsSync(dest)) rmSync(dest, { recursive: true, force: true });
-    cpSync(src, dest, { recursive: true });
+    // Merge over the existing tree instead of deleting it: the shipped files
+    // are versioned content and may be replaced, but a file the user added
+    // to a vendored skill must not disappear without a copy.
+    mergeDir(src, dest);
   }
 }
 
@@ -433,11 +796,17 @@ if (has("python")) {
     try {
       const scripts = execFileSync("python", ["-c", "import sysconfig; print(sysconfig.get_path('scripts'))"], { encoding: "utf8" }).trim();
       const exe = join(scripts, "redis-mcp-server.exe");
-      const cfgPath = join(TARGET, "opencode.jsonc");
-      // JSONC-aware: JSON.parse throws on this file's comments, and a
-      // JSON.stringify round-trip would strip them.
-      replaceMcpCommand(cfgPath, "redis", [exe, "--url", "{env:REDIS_URL}"]);
-      log(`  redis MCP -> ${exe}`);
+      // The entry must not point at an exe that was never installed: a failed
+      // pip install leaves the repo's absolute paths in place.
+      if (!existsSync(exe)) {
+        log(`  warn: ${exe} missing after install — redis MCP left at the repo's absolute paths`);
+      } else {
+        const cfgPath = join(TARGET, "opencode.jsonc");
+        // JSONC-aware: JSON.parse throws on this file's comments, and a
+        // JSON.stringify round-trip would strip them.
+        replaceMcpCommand(cfgPath, "redis", [process.execPath, join(TARGET, "tools", "mcp-env.mjs"), exe, "--url", "@REDIS_URL@"]);
+        log(`  redis MCP -> ${exe}`);
+      }
     } catch (e) {
       log(`  warn: could not repoint redis MCP (${e.message})`);
     }
@@ -454,7 +823,11 @@ if (has("python")) {
 const REA_PKG = "rea-agents@6.5.0";
 const REA_DIR = join(TARGET, "tools", "rea-agents");
 const REA_CLI = join(REA_DIR, "node_modules", "rea-agents", "scripts", "rea.mjs");
-run("npm", ["install", "--prefix", REA_DIR, "--no-audit", "--no-fund", REA_PKG]);
+if (toolsDirReady) {
+  run("npm", ["install", "--prefix", REA_DIR, "--no-audit", "--no-fund", REA_PKG]);
+} else {
+  log(`  skip ${REA_PKG} (${toolsDir} is not ours to write into)`);
+}
 if (DRY) {
   log("  [dry-run] would repoint rea MCP at this machine's newest Node >= 20.12 + the installed rea.mjs");
 } else if (!existsSync(REA_CLI)) {
@@ -508,8 +881,13 @@ const MCP_TOOL_INSTALLS = [
     dir: "postgres-mcp",
     pkg: "@modelcontextprotocol/server-postgres@0.6.2",
     entry: ["node_modules", "@modelcontextprotocol", "server-postgres", "dist", "index.js"],
-    args: ["{env:DATABASE_URL}"],
+    args: ["@DATABASE_URL@"],
     via: "node",
+    // postgres reads the URL from argv, and mongodb reads
+    // MDB_MCP_CONNECTION_STRING from env: both need mcp-env to load
+    // <config>/.env. The host's {env:...} expansion runs before this process
+    // starts and would pass "" instead.
+    wrap: true,
   },
   {
     key: "mongodb",
@@ -518,6 +896,7 @@ const MCP_TOOL_INSTALLS = [
     entry: ["node_modules", "mongodb-mcp-server", "dist", "esm", "index.js"],
     args: ["--readOnly"],
     via: "node",
+    wrap: true,
   },
   {
     key: "kubernetes",
@@ -529,7 +908,7 @@ const MCP_TOOL_INSTALLS = [
       "bin",
       `kubernetes-mcp-server-${K8S_PLATFORM}${process.platform === "win32" ? ".exe" : ""}`,
     ],
-    args: ["--log-file", "stderr"],
+    args: [],
     via: "exe",
   },
 ];
@@ -537,6 +916,10 @@ const MCP_TOOL_INSTALLS = [
 for (const t of MCP_TOOL_INSTALLS) {
   const dir = join(TARGET, "tools", t.dir);
   const entryPath = join(dir, ...t.entry);
+  if (!toolsDirReady) {
+    log(`  skip ${t.pkg} (${toolsDir} is not ours to write into)`);
+    continue;
+  }
   log(`  install ${t.pkg} -> ${dir}`);
   run("npm", ["install", "--prefix", dir, "--no-audit", "--no-fund", t.pkg]);
   // node <entry> <args> for the JS MCPs; the platform binary itself for
@@ -558,7 +941,10 @@ for (const t of MCP_TOOL_INSTALLS) {
   }
   try {
     const cfgPath = join(TARGET, "opencode.jsonc");
-    const cmd = [...(launcher ? [launcher] : []), entryPath, ...t.args];
+    const mcpEnv = join(TARGET, "tools", "mcp-env.mjs");
+    const cmd = t.wrap
+      ? [launcher, mcpEnv, launcher, entryPath, ...t.args]
+      : [...(launcher ? [launcher] : []), entryPath, ...t.args];
     replaceMcpCommand(cfgPath, t.key, cmd);
     log(`  ${t.key} MCP -> ${cmd.join(" ")}`);
   } catch (e) {
@@ -579,6 +965,8 @@ const ANALYTICS_PY = join(ANALYTICS_BIN, process.platform === "win32" ? "python.
 const ANALYTICS_EXE = join(ANALYTICS_BIN, process.platform === "win32" ? "analytics-mcp.exe" : "analytics-mcp");
 if (!has("python")) {
   log("  skip: analytics-mcp (no python)");
+} else if (!toolsDirReady) {
+  log(`  skip: analytics-mcp (${toolsDir} is not ours to write into)`);
 } else {
   try {
     log(`  install ${ANALYTICS_PKG} -> ${ANALYTICS_DIR} (venv)`);
@@ -591,7 +979,7 @@ if (!has("python")) {
     } else {
       try {
         const cfgPath = join(TARGET, "opencode.jsonc");
-        replaceMcpCommand(cfgPath, "google-analytics", [ANALYTICS_EXE]);
+        replaceMcpCommand(cfgPath, "google-analytics", [process.execPath, join(TARGET, "tools", "mcp-env.mjs"), ANALYTICS_EXE]);
         log(`  google-analytics MCP -> ${ANALYTICS_EXE}`);
       } catch (e) {
         log(`  warn: could not repoint google-analytics MCP (${e.message})`);

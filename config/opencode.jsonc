@@ -52,15 +52,20 @@
     }
   },
   "plugin": [
-    "opencode-mem",
     "oh-my-opencode-slim"
     // dcp is vendored locally at plugins/opencode-dcp (pending upstream #608
     // visible-tag fix) — path plugins auto-load, so no npm entry here;
     // leaving "@tarquinen/opencode-dcp" would double-load it.
+    // opencode-mem is also a local path plugin (plugins/opencode-mem): its npm
+    // install in the OpenCode cache came out incomplete after an ENOSPC
+    // (missing @libsql/client). The package is pinned in the config home
+    // (<config>/package.json), because the loader resolves bare imports from
+    // <config>/node_modules rather than from the plugin directory.
     // Local path plugins (opencode-github-release, opencode-telemetry,
     // opencode-ralph-wiggum, envsitter-guard, opencode-log-sanitizer,
-    // opencode-command-inject, opencode-review, opencode-dcp) — all export
-    // v2 { id, setup } and auto-load from plugins/, so no npm entries here.
+    // opencode-command-inject, opencode-review, opencode-code-review,
+    // opencode-mem, opencode-dcp) — all export v2 { id, setup } and auto-load
+    // from plugins/, so no npm entries here.
   ],
   "mcp": {
     "notion": {
@@ -71,6 +76,12 @@
     "github": {
       "type": "remote",
       "url": "https://api.githubcopilot.com/mcp/",
+      // The endpoint does not support dynamic client registration, so the
+      // OAuth flow cannot register a client. A GitHub PAT in the header works;
+      // the value comes from the user environment (GITHUB_TOKEN).
+      "headers": {
+        "Authorization": "Bearer {env:GITHUB_TOKEN}"
+      },
       "enabled": true
     },
     "context7": {
@@ -139,11 +150,9 @@
     },
     "google-analytics": {
       "type": "local",
-      "command": ["C:\\Users\\horgh\\.config\\opencode\\tools\\analytics-mcp\\.venv\\Scripts\\analytics-mcp.exe"],
-      "environment": {
-        "GOOGLE_APPLICATION_CREDENTIALS": "{env:GOOGLE_APPLICATION_CREDENTIALS}",
-        "GOOGLE_PROJECT_ID": "{env:GOOGLE_PROJECT_ID}"
-      },
+      // mcp-env loads <config>/.env; the host's own {env:...} expansion sees
+      // only its process environment and would pass empty credentials.
+      "command": ["C:\\Program Files\\nodejs\\node.exe", "C:\\Users\\horgh\\.config\\opencode\\tools\\mcp-env.mjs", "C:\\Users\\horgh\\.config\\opencode\\tools\\analytics-mcp\\.venv\\Scripts\\analytics-mcp.exe"],
       "enabled": true
     },
     "prisma": {
@@ -153,26 +162,31 @@
     },
     "postgres": {
       "type": "local",
-      "command": ["C:\\Program Files\\nodejs\\node.exe", "C:\\Users\\horgh\\.config\\opencode\\tools\\postgres-mcp\\node_modules\\@modelcontextprotocol\\server-postgres\\dist\\index.js", "{env:DATABASE_URL}"],
+      // mcp-env loads <config>/.env and expands {env:...}: OpenCode's own
+      // expansion only sees its process environment, which does not include
+      // that file, so the URL arrived empty and the server threw "Invalid URL".
+      "command": ["C:\\Program Files\\nodejs\\node.exe", "C:\\Users\\horgh\\.config\\opencode\\tools\\mcp-env.mjs", "C:\\Program Files\\nodejs\\node.exe", "C:\\Users\\horgh\\.config\\opencode\\tools\\postgres-mcp\\node_modules\\@modelcontextprotocol\\server-postgres\\dist\\index.js", "@DATABASE_URL@"],
       "enabled": true
     },
     "mongodb": {
       "type": "local",
-      "command": ["C:\\Program Files\\nodejs\\node.exe", "C:\\Users\\horgh\\.config\\opencode\\tools\\mongodb-mcp\\node_modules\\mongodb-mcp-server\\dist\\esm\\index.js", "--readOnly"],
-      "environment": {
-        "MDB_MCP_CONNECTION_STRING": "{env:MDB_MCP_CONNECTION_STRING}"
-      },
+      "command": ["C:\\Program Files\\nodejs\\node.exe", "C:\\Users\\horgh\\.config\\opencode\\tools\\mcp-env.mjs", "C:\\Program Files\\nodejs\\node.exe", "C:\\Users\\horgh\\.config\\opencode\\tools\\mongodb-mcp\\node_modules\\mongodb-mcp-server\\dist\\esm\\index.js", "--readOnly"],
       "enabled": true
     },
     "redis": {
       "type": "local",
-      "command": ["C:\\Users\\horgh\\AppData\\Local\\Programs\\Python\\Python314\\Scripts\\redis-mcp-server.exe", "--url", "{env:REDIS_URL}"],
+      "command": ["C:\\Program Files\\nodejs\\node.exe", "C:\\Users\\horgh\\.config\\opencode\\tools\\mcp-env.mjs", "C:\\Users\\horgh\\AppData\\Local\\Programs\\Python\\Python314\\Scripts\\redis-mcp-server.exe", "--url", "@REDIS_URL@"],
       "enabled": true
     },
     "kubernetes": {
       "type": "local",
-      "command": ["C:\\Users\\horgh\\.config\\opencode\\tools\\kubernetes-mcp\\node_modules\\kubernetes-mcp-server-windows-amd64\\bin\\kubernetes-mcp-server-windows-amd64.exe", "--log-file", "stderr"],
-      "enabled": true
+      // Disabled: the server refuses to start with no kubeconfig or current
+      // context ("unable to create kubernetes target provider"). Set a context
+      // with `kubectl config set-context` + `use-context`, then flip enabled.
+      // No --log-file: it is only valid with --port (HTTP mode); stdio is the
+      // default and what the MCP host speaks.
+      "command": ["C:\\Users\\horgh\\.config\\opencode\\tools\\kubernetes-mcp\\node_modules\\kubernetes-mcp-server-windows-amd64\\bin\\kubernetes-mcp-server-windows-amd64.exe"],
+      "enabled": false
     },
     "expo": {
       "type": "remote",

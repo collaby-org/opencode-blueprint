@@ -22,24 +22,47 @@ Set up PR-Agent automated PR reviews in the current project
    blind-overwrite):
    ```yaml
    name: PR Agent
+
    on:
      pull_request:
-       types: [opened, synchronize]
+       types: [opened, synchronize, reopened, ready_for_review]
+       branches: [main, master, develop]
+
+   permissions:
+     contents: read
+     pull-requests: write
+     issues: write
+
+   concurrency:
+     group: pr-agent-${{ github.event.pull_request.number }}
+     cancel-in-progress: true
+
    jobs:
      pr_agent_job:
        runs-on: ubuntu-latest
-       permissions:
-         pull-requests: write
-         issues: write
-         contents: read
+       timeout-minutes: 20
+       env:
+         LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
        steps:
-         - name: PR Agent action step
-           uses: the-pr-agent/pr-agent@main
+         - name: Checkout
+           uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+           with:
+             fetch-depth: 0
+
+         - name: PR Agent
+           if: ${{ env.LLM_API_KEY != '' }}
+           # Pinned to a full commit SHA: a mutable tag would receive this job's secrets.
+           uses: the-pr-agent/pr-agent@b4c3d11d2247dce6f716074c5352c3f97d6564df
            env:
              OPENAI__API_BASE: ${{ secrets.LLM_API_BASE }}
              OPENAI__KEY: ${{ secrets.LLM_API_KEY }}
              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+         - name: Not configured
+           if: ${{ env.LLM_API_KEY == '' }}
+           run: echo "::notice::LLM_API_KEY is not set; skipping PR-Agent. The local gate still applies."
    ```
+   Forks never get secrets, so a fork PR cannot run the review.
 3. Create `.pr_agent.toml` in the repo root (skip if one already exists):
    ```toml
    [config]

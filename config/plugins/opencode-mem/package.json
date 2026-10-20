@@ -1,0 +1,6 @@
+{
+  "name": "opencode-mem-local",
+  "private": true,
+  "type": "module",
+  "main": "index.ts"
+}

@@ -126,8 +126,16 @@ The constraints that must hold at runtime:
 - A rewrite is validated before it is written: the file must still parse and
   the entry must carry exactly the array that was intended. A failed rewrite
   leaves the file as it was and prints a warning.
-- Files that can hold user values are copied only when missing. Files that
-  are versioned content are overwritten.
+- Files that can hold user values are copied only when missing: `.env.example`,
+  `.env`, `oh-my-opencode-slim.jsonc` and the agent files. `opencode.jsonc`,
+  `AGENTS.md` and `plugins/` are versioned content and are overwritten, and
+  the first two are backed up before that. `commands/` is merged: a missing
+  shipped command is written, a command the user changed is kept with a backup,
+  and a command the installer did not put there is never removed. A shipped
+  command that changed in a new release therefore lands on a fresh install
+  only; delete the file to take the new one. The vendored
+  skills are merged the other way round: the shipped files are versioned
+  content and are replaced, a file the user added to a skill is kept.
 - The skill install runs through the `skills` CLI, which rewrites `SKILL.md`
   on every run. The opt out for user invoked skills is therefore applied
   after every install, and it has to be idempotent.
