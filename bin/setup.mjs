@@ -310,18 +310,52 @@ cp(join(REPO, "config", "commands"), join(TARGET, "commands"));
 // task sessions that still reference it fail to drain with `Agent not found`.
 // V2 reads agent markdown from `agents/` (plural); the v1 `agent/` directory
 // is ignored, which is why the file used to be missing at runtime.
-cp(join(REPO, "config", "agents"), join(TARGET, "agents"));
-// The V1 `agent/` directory is ignored by V2. When it holds nothing but the
-// file this installer put there, remove it, so a stale copy cannot be
-// mistaken for the live one. Anything else in it belongs to the user.
+//
+// Content comparison that ignores line endings: a Windows checkout can turn
+// LF into CRLF, and that is not a user edit.
+const sameContent = (a, b) =>
+  readFileSync(a, "utf8").replace(/\r\n/g, "\n") === readFileSync(b, "utf8").replace(/\r\n/g, "\n");
+
+// Installed per file, copy-if-missing: a tuned agent file survives an
+// install, the same rule the `.env` template follows. A file that differs
+// from the shipped one is kept and backed up, never overwritten.
+const agentsSrc = join(REPO, "config", "agents");
+const agentsDest = join(TARGET, "agents");
+if (!DRY) mkdirSync(agentsDest, { recursive: true });
+for (const entry of readdirSync(agentsSrc, { withFileTypes: true })) {
+  if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+  const src = join(agentsSrc, entry.name);
+  const dest = join(agentsDest, entry.name);
+  if (existsSync(dest)) {
+    if (sameContent(dest, src)) {
+      log(`  skip ${dest} (already current)`);
+    } else {
+      backup(dest);
+      log(`  keep ${dest} (you changed it; backed up, not overwritten — delete it to take the shipped one)`);
+    }
+    continue;
+  }
+  log(`  copy ${src} -> ${dest}`);
+  if (!DRY) copyFileSync(src, dest);
+}
+// The V1 `agent/` directory is ignored by V2. Remove it only when it holds
+// nothing but the exact file this installer shipped; anything else belongs to
+// the user and is left alone.
 const legacyAgentDir = join(TARGET, "agent");
 if (existsSync(legacyAgentDir)) {
   const legacyEntries = readdirSync(legacyAgentDir);
-  if (legacyEntries.length === 1 && legacyEntries[0] === "orchestrator.md") {
+  const legacyFile = join(legacyAgentDir, "orchestrator.md");
+  const shippedAgent = join(agentsSrc, "orchestrator.md");
+  const isShippedCopy =
+    legacyEntries.length === 1 &&
+    existsSync(legacyFile) &&
+    existsSync(shippedAgent) &&
+    sameContent(legacyFile, shippedAgent);
+  if (isShippedCopy) {
     rmSync(legacyAgentDir, { recursive: true, force: true });
     log(`  removed ${legacyAgentDir} (V2 reads agents/)`);
   } else {
-    log(`  keep ${legacyAgentDir} (holds ${legacyEntries.length} entries, not ours)`);
+    log(`  keep ${legacyAgentDir} (not the file this installer shipped; V2 ignores it, remove it yourself)`);
   }
 }
 cp(join(REPO, "config", "plugins", "opencode-review"), join(TARGET, "plugins", "opencode-review"));
