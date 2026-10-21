@@ -95,6 +95,12 @@ the last releases delivered.
   `Opencode-DCP/opencode-dynamic-context-pruning`.
 - [ ] The idle auto review trigger of `opencode-review` gets wired. The
   host exposes no v2 hook for it. Blocked on the host.
+- [ ] The hosted Kody review fails on its own provider. The check reports
+  "Unexpected error while running the code review (openai_compatible) ...
+  HTTP 400" for the `gemini` model it is configured with, so a red "Kody Code
+  Review" check is a service outage on their side, not a finding. The Kodus
+  CLI workflow and PR-Agent run in the same pull request and still pass.
+  Blocked on the provider.
 
 ## Shipped
 

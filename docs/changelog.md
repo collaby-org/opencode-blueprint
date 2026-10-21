@@ -9,6 +9,20 @@ Version 1.0.0 was published to npm but never got a git tag, so it has no tag
 range. The npm publish timestamps are UTC and can sit a day earlier than the
 commit date of the same version.
 
+## [1.4.4] - 2026-10-21
+
+### Fixed
+
+- The dispatch scope manifest is no longer published. `.agents/` is ignored:
+  the manifest belongs to one dispatch, not to the package, and every install
+  was carrying it because nothing ignored it.
+
+### Changed
+
+- The roadmap records that the hosted Kody review fails on its own provider
+  (`openai_compatible`, HTTP 400), so a red "Kody Code Review" check is a
+  service outage rather than a finding.
+
 ## [1.4.3] - 2026-10-20
 
 ### Added

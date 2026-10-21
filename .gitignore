@@ -11,3 +11,6 @@ new-session---*.json
 .opencode/*.log
 # Inno Setup build output (distributed via GitHub Releases, not git)
 installer/Output/
+# The dispatch scope manifest: a working file for one dispatch, not a shipped
+# one. Without this it reaches npm and every install that follows.
+.agents/
