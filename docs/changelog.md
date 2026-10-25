@@ -9,6 +9,30 @@ Version 1.0.0 was published to npm but never got a git tag, so it has no tag
 range. The npm publish timestamps are UTC and can sit a day earlier than the
 commit date of the same version.
 
+## [1.4.5] - 2026-10-25
+
+### Fixed
+
+- A streamed OpenAI-compatible response that ends without a terminal
+  `finish_reason` frame no longer fails the turn. opencode 2.x raises
+  `OpenAI Chat stream ended without finish_reason` (`incomplete-stream`) when
+  the stream stops without that frame, and accepts nothing else; a compaction
+  summary is the largest request a session makes, so it hit it first. The
+  template now ships a `providers.nvidia` override —
+  `compatibility.requireFinishReason: false` and a ten minute `chunkTimeout` —
+  with the trade-off recorded in the file: a genuinely truncated NVIDIA reply
+  is then reported as `stop`.
+
+### Changed
+
+- The template records which provider config key v2 reads. `providers` (plural)
+  is the v2-native block and accepts `compatibility`; the singular `provider`
+  block is deprecated, rejects `compatibility` through
+  `additionalProperties: false`, and is kept only for the three
+  `@ai-sdk/openai-compatible` endpoints that still declare `npm` and `options`.
+- `docs/tech_stack.md` documents the stream compatibility levers and which
+  config block they belong to.
+
 ## [1.4.4] - 2026-10-21
 
 ### Fixed

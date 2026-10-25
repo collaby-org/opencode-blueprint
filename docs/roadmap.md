@@ -74,6 +74,11 @@ the last releases delivered.
   the repository carries one machine's absolute paths for the local MCP
   servers. The installer rewrites them, but anyone who copies the file by
   hand gets entries that point nowhere.
+- [ ] Re-point the default model. `opencode/muse-spark-1.3-contributor-free`
+  answers `410 ModelDeprecated` on the opencode Zen gateway, so a fresh install
+  starts on a model that cannot answer. Done when the template's `model` line
+  names a model that still serves, and `docs/tech_stack.md` and
+  `docs/targets.md` agree with it.
 - [ ] Decide whether this repository needs its own check. `package.json`
   declares no `scripts`, so the Kodus and PR-Agent loops are the only gates
   that can run here.

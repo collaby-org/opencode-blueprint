@@ -1,6 +1,6 @@
 {
   "name": "opencode-blueprint",
-  "version": "1.4.4",
+  "version": "1.4.5",
   "description": "One-command production-grade opencode setup: 22 MCPs, 11 plugins, 123 skills, global workflow, versioned docs and changelog discipline, local cross-model code review, Kodus + PR-Agent review loops.",
   "type": "module",
   "bin": {
