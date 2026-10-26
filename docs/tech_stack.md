@@ -152,6 +152,47 @@ Configured in `config/opencode.jsonc`, all through
 
 Default model: `opencode/muse-spark-1.3-contributor-free`.
 
+### Stream compatibility (opencode 2.x)
+
+`opencode.jsonc` carries a second provider block, `providers` (plural), which
+is the v2-native key. It holds only compatibility overrides, because an entry
+there patches the provider the host already knows instead of replacing it — the
+`nvidia` entry applies whether nvidia was added through the desktop settings or
+by the installer, and the catalog is left untouched (verified through
+`GET /api/model`: 23 nvidia models after the override).
+
+```jsonc
+"providers": {
+  "nvidia": {
+    "compatibility": { "requireFinishReason": false },
+    "settings": { "chunkTimeout": 600000 }
+  }
+}
+```
+
+`requireFinishReason` defaults to `true` and only v2 reads it. With `true`, a
+streamed OpenAI-compatible response that ends without a terminal
+`finish_reason` frame fails the turn with
+`OpenAI Chat stream ended without finish_reason`, classification
+`incomplete-stream`, and is retried. The frame is missing after a bare EOF, a
+`[DONE]` with no reason-bearing chunk, only `finish_reason: null` chunks, or a
+`choices: []` usage-only tail. Reasoning models and long generations are the
+usual trigger, and a compaction summary is the largest request a session makes.
+
+`chunkTimeout` is the inter-chunk timeout, 300000 ms by default; a reasoning
+model that thinks for longer than that is aborted into the same error.
+
+Trade-off: `requireFinishReason: false` accepts the stream and synthesizes
+`stop`, so a genuinely truncated reply is reported as complete. opencode's own
+compaction still catches a summary that hits the output cap (`length`), but a
+hard cut is silent. The stricter alternative is to pin compaction to a model
+that always sends the frame, with `agents.compaction.model`.
+
+The singular `provider` block above is deprecated in v2. Its schema is
+`additionalProperties: false` without `compatibility`, so an override written
+there is dropped silently; it stays only because the three
+`@ai-sdk/openai-compatible` entries still declare `npm` and `options`.
+
 ## Skills
 
 | Item | Count | Source |

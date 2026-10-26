@@ -61,6 +61,10 @@ outside this repository has to move first.
 - [done] Three providers are configured: Token Harbor, Omni Router on
   `localhost:20128`, and opencode Zen with the key from the environment.
 - [done] The default model is `opencode/muse-spark-1.3-contributor-free`.
+- [done] The template carries the v2 stream compatibility override for
+  nvidia (`requireFinishReason: false`, ten minute `chunkTimeout`), so a
+  streamed reply that ends without a terminal `finish_reason` frame no longer
+  fails the turn or the compaction summary that rides on it (1.4.5).
 
 ## Plugins
 
