@@ -9,6 +9,37 @@ Version 1.0.0 was published to npm but never got a git tag, so it has no tag
 range. The npm publish timestamps are UTC and can sit a day earlier than the
 commit date of the same version.
 
+## [1.4.6] - 2026-10-30
+
+### Fixed
+
+- Slow NVIDIA reasoning turns no longer die with `Timed out waiting for response
+  data`, and a session that hit this before keeps working without being
+  recreated. That message is the transport's inter-chunk timeout
+  (`chunkTimeout`), applied to the raw byte stream before SSE framing; it resets
+  with every received chunk, so it bounds a single silent gap rather than the
+  total duration of a turn. `stepfun-ai/step-5-preview` takes about 60 s to send
+  response headers and then streams nothing for 173 s before the first token,
+  with no keepalive frames, so the silence alone nearly fills a 180 s window and
+  any slower run crosses it; run-to-run latency varies by well over a minute.
+  opencode's stock `chunkTimeout` is 900000 ms and its stock `headerTimeout` is
+  300000 ms. The template had shipped 600000 ms - below the stock chunk window -
+  and the config in use had drifted down to 180000 ms. The template now ships
+  `headerTimeout: 600000` and `chunkTimeout: 1800000`, and a config reload
+  reaches the next turn of every session because the values are resolved per
+  request from the provider entry.
+- The stream compatibility note in `docs/tech_stack.md` no longer calls
+  300000 ms the `chunkTimeout` default. It is the `headerTimeout` default, and
+  the wrong number is what made the previous override look generous instead of
+  sub-default.
+
+### Changed
+
+- `headerTimeout` and `chunkTimeout` are read from the provider entry only.
+  A model-level `providers.<id>.models.<model>.settings.chunkTimeout` is
+  silently ignored on 2.2.4 (a 5000 ms model window still produced a full
+  answer), so the template ships no per-model override.
+
 ## [1.4.5] - 2026-10-25
 
 ### Fixed
