@@ -165,10 +165,35 @@ by the installer, and the catalog is left untouched (verified through
 "providers": {
   "nvidia": {
     "compatibility": { "requireFinishReason": false },
-    "settings": { "chunkTimeout": 600000 }
+    "settings": { "headerTimeout": 600000, "chunkTimeout": 1800000 }
   }
 }
 ```
+
+Both windows are configured and both behave differently. `headerTimeout`
+(stock 300000 ms) bounds the wait for response headers; `chunkTimeout` (stock
+900000 ms) bounds the gap between streamed bytes once headers have arrived; the
+whole-request `timeout` is unbounded when unset. The chunk window is applied to
+the raw byte stream, before SSE framing, so a provider that emits keepalive
+comment lines keeps it open and one that stays completely silent does not. The
+window resets on every received chunk, so it bounds a single silent gap, not the
+total duration of a turn. A window below stock aborts the turn with
+`Timed out waiting for response data`, which is what happens to a reasoning model
+that stays silent for longer than the window. Measured on
+`stepfun-ai/step-5-preview`: 60 s to response headers, then 173 s of silence
+before the first token, no keepalive frames at all - and run-to-run latency
+varies by well over a minute. A 180000 ms window therefore sits right at the
+typical gap and aborts the slow runs, and even the 600000 ms window shipped in
+1.4.5 was below the 900000 ms stock value; the template now ships 1800000 ms.
+`false` disables the window entirely; it is not shipped here because a dead
+stream would then hang instead of failing, and a pinned whole-request `timeout`
+would be the only remaining bound.
+
+Both keys are honored only on the provider entry. Putting them under
+`providers.<id>.models.<model>.settings` does nothing: a model-level
+`chunkTimeout: 5000` still produced a complete answer, so the resolver reads
+them from the provider block alone. Declaring `models` on the provider is
+therefore pointless here, and it also changes which models the catalog exposes.
 
 `requireFinishReason` defaults to `true` and only v2 reads it. With `true`, a
 streamed OpenAI-compatible response that ends without a terminal
@@ -179,8 +204,16 @@ streamed OpenAI-compatible response that ends without a terminal
 `choices: []` usage-only tail. Reasoning models and long generations are the
 usual trigger, and a compaction summary is the largest request a session makes.
 
-`chunkTimeout` is the inter-chunk timeout, 300000 ms by default; a reasoning
-model that thinks for longer than that is aborted into the same error.
+Setting either window below stock is the failure this section exists to prevent:
+a reasoning model that thinks longer than the window is aborted into the
+generic transport error, which says nothing about the real cause. The note here
+previously called 300000 ms the chunk default (that is the `headerTimeout`
+default), which is what made the 600000 ms override shipped in 1.4.5 look
+generous when it was already below stock.
+
+Resolution is per request from the provider entry, so a config reload reaches the
+next turn of every session, including sessions created before the change. Only a
+turn already streaming keeps the values it started with.
 
 Trade-off: `requireFinishReason: false` accepts the stream and synthesizes
 `stop`, so a genuinely truncated reply is reported as complete. opencode's own
