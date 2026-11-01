@@ -312,6 +312,7 @@ the installer needs — so do not put a credential in a tracked file.
 |---|---|
 | `AGENTS.md` | Global workflow (source of truth) |
 | `config/opencode.jsonc` | 22 MCPs (5 GCP remotes and the local kubernetes server disabled until they have credentials) · 1 npm + 10 local plugins · instructions |
+| `config/dcp.jsonc` | DCP's own settings, installed to `~/.config/opencode/dcp.jsonc` only when missing: `experimental.allowSubAgents` so compression is not refused in agent lanes |
 | `config/commands/` | `/pr-agent`, `/pr-agent-setup`, `/kodus-review` (plus `/code-review`, registered by the `opencode-code-review` plugin) |
 | `config/agents/` | The `orchestrator` agent, installed to `~/.config/opencode/agents/` |
 | `config/plugins/` | 10 local plugin trees: `opencode-review`, `opencode-code-review`, `opencode-mem` (wrapper), `opencode-dcp` (vendored 3.2.0), + 6 v2 ports (github-release, telemetry, envsitter-guard, log-sanitizer, command-inject, ralph-wiggum) |

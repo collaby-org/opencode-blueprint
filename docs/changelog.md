@@ -28,6 +28,17 @@ commit date of the same version.
   the host rather than the next turn. `docs/tech_stack.md` records that
   restart requirement next to the key.
 
+### Changed
+
+- Agent-lane turns now carry DCP's system prompt and its automatic nudges.
+  While `experimental.allowSubAgents` was false, DCP skipped the system prompt
+  injection for a subagent session, so a lane turn had no compression guidance
+  and no message-id tags. Enabling the key turns both on: every lane turn pays
+  that prompt's context, and the nudges can fire inside a lane.
+- A completed `task` or `subagent` tool output can now be carried into a
+  compression summary, because the same key enables the protected-tool
+  extension for those tools.
+
 ## [1.4.6] - 2026-10-30
 
 ### Fixed

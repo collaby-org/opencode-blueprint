@@ -111,6 +111,12 @@ existing `dcp.jsonc` belongs to the user and is never overwritten.
 The plugin reads the file at load, so an edit reaches the next start of the
 host, not the next turn.
 
+The key opens three things in a lane, not only the command: DCP's system
+prompt is injected into every lane turn (it carries the compression guidance
+and the message-id tags, so it costs context on each turn), the automatic
+nudges can fire inside the lane, and a completed `task` or `subagent` tool
+output can be carried into a compression summary.
+
 ## MCP servers
 
 22 entries in `config/opencode.jsonc`: 15 remote and 7 local. 17 are enabled,
