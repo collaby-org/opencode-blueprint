@@ -708,6 +708,21 @@ const cp = (src, dest) => {
 };
 cp(join(REPO, "config", "opencode.jsonc"), join(TARGET, "opencode.jsonc"));
 cp(join(REPO, "AGENTS.md"), join(TARGET, "AGENTS.md"));
+// DCP reads its own config file, and its `experimental.allowSubAgents` default
+// is false: every compression path is refused in a subagent session with
+// "DCP compression is disabled in subagents". Agent lanes are subagent
+// sessions, so without this file /dcp-compress and the automatic nudges are
+// dead in exactly the sessions the orchestrator dispatch creates. Installed
+// only when missing - the file is user-tunable, so an existing dcp.jsonc is
+// never overwritten.
+const dcpConfigSrc = join(REPO, "config", "dcp.jsonc");
+const dcpConfigDest = join(TARGET, "dcp.jsonc");
+if (existsAny(dcpConfigDest)) {
+  log(`  keep ${dcpConfigDest} (already present)`);
+} else {
+  log(`  copy ${dcpConfigSrc} -> ${dcpConfigDest}`);
+  if (!DRY) copyOrKeep(dcpConfigSrc, dcpConfigDest);
+}
 // The MCP servers that need a credential fail at connect time when the value
 // is not in the process environment, and the host expands {env:NAME} from
 // its own environment when it starts. A value set after the host started is

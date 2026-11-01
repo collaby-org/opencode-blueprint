@@ -9,6 +9,25 @@ Version 1.0.0 was published to npm but never got a git tag, so it has no tag
 range. The npm publish timestamps are UTC and can sit a day earlier than the
 commit date of the same version.
 
+## [1.4.7] - 2026-11-01
+
+### Fixed
+
+- Compression now works inside agent lanes. DCP refuses every compression path
+  in a subagent session while `experimental.allowSubAgents` is `false`, and
+  `false` is its default, so `/dcp-compress` answered `DCP compression is
+  disabled in subagents` and the automatic nudges never fired there. Agent
+  lanes are subagent sessions - every child of orchestrator, fixer, designer or
+  explorer carries a `parentID` - so on a configuration that dispatches its
+  work to lanes, every compression attempt was dead in exactly those sessions.
+  The template now ships `config/dcp.jsonc` with
+  `"experimental": { "allowSubAgents": true }`, installed to the config home as
+  `dcp.jsonc` only when that file is missing, and the Windows installer carries
+  it in both the payload and the live deployment.
+- DCP reads its config at load, so the shipped file reaches the next start of
+  the host rather than the next turn. `docs/tech_stack.md` records that
+  restart requirement next to the key.
+
 ## [1.4.6] - 2026-10-30
 
 ### Fixed

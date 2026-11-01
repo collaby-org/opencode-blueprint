@@ -216,7 +216,8 @@ npx opencode-blueprint
 ```
 
 The installer: checks prerequisites → backs up your existing config →
-copies `opencode.jsonc` + `AGENTS.md` + commands + `.env.example` starter →
+copies `opencode.jsonc` + `AGENTS.md` + `dcp.jsonc` + commands + `.env.example`
+starter →
 copies all 10 local plugin trees and installs each one's deps (plus the
 central `@opencode-ai/plugin` fallback the loader resolves against) →
 installs every skill globally (registry via `skills add`, the workflow skills
