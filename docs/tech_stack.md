@@ -88,6 +88,35 @@ Vendored from `@tarquinen/opencode-dcp` **3.2.0** (AGPL-3.0-or-later), with
 The installer runs `npm install --omit=dev --legacy-peer-deps` for this tree, so
 the runtime keeps the 0.4.x `@opentui/core` the TUI entry was built against.
 
+### Compression config
+
+`config/dcp.jsonc` is installed to the config home as `dcp.jsonc`; that is the
+file DCP reads its own settings from, with a project `.opencode/dcp.jsonc`
+layered over it. It ships one key:
+
+```jsonc
+"experimental": { "allowSubAgents": true }
+```
+
+DCP's default for `allowSubAgents` is `false`, and while it is false every
+compression path returns `DCP compression is disabled in subagents` when the
+session is a subagent session. Agent lanes are subagent sessions - every child
+carries a `parentID` - so on a configuration that dispatches its work to lanes,
+`/dcp-compress` and the automatic nudges are both dead inside them. Verified on
+the vendored 3.2.0 by sending `/dcp-compress` to a running server for two such
+sessions: both answered `CommandExecutionError: DCP compression is disabled in
+subagents`. The installer installs the file only when it is missing; an
+existing `dcp.jsonc` belongs to the user and is never overwritten.
+
+The plugin reads the file at load, so an edit reaches the next start of the
+host, not the next turn.
+
+The key opens three things in a lane, not only the command: DCP's system
+prompt is injected into every lane turn (it carries the compression guidance
+and the message-id tags, so it costs context on each turn), the automatic
+nudges can fire inside the lane, and a completed `task` or `subagent` tool
+output can be carried into a compression summary.
+
 ## MCP servers
 
 22 entries in `config/opencode.jsonc`: 15 remote and 7 local. 17 are enabled,

@@ -11,6 +11,9 @@
 ;   - opencode.jsonc / AGENTS.md are deployed only when missing
 ;     (onlyifdoesntexist), so the user's copy is still there for setup.mjs to
 ;     back up before it replaces it (setup.mjs 2/6).
+;   - dcp.jsonc is deployed only when missing. An existing file stays in place;
+;     setup.mjs adds experimental.allowSubAgents when that key is absent and
+;     leaves the rest of the user's DCP config and comments untouched.
 ;   - commands/ is deployed only when missing as well (onlyifdoesntexist): a
 ;     command the user changed is never overwritten here. setup.mjs owns the
 ;     rest, and it keeps a changed command with a backup.
@@ -53,6 +56,7 @@ InfoAfterFile=finish-note.txt
 ; Reference payload (repair/offline copy of exactly what setup.mjs deploys).
 Source: "..\AGENTS.md"; DestDir: "{app}\payload"; Flags: ignoreversion
 Source: "..\config\opencode.jsonc"; DestDir: "{app}\payload\config"; Flags: ignoreversion
+Source: "..\config\dcp.jsonc"; DestDir: "{app}\payload\config"; Flags: ignoreversion
 Source: "..\config\.env.example"; DestDir: "{app}\payload\config"; Flags: ignoreversion
 Source: "..\config\commands\*"; DestDir: "{app}\payload\config\commands"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\config\plugins\*"; DestDir: "{app}\payload\config\plugins"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "node_modules\*"
@@ -68,6 +72,7 @@ Source: "finish-note.txt"; DestDir: "{app}"; Flags: ignoreversion
 ; never removed.
 Source: "..\AGENTS.md"; DestDir: "{code:GetConfigHome}"; Flags: ignoreversion uninsneveruninstall onlyifdoesntexist
 Source: "..\config\opencode.jsonc"; DestDir: "{code:GetConfigHome}"; Flags: ignoreversion uninsneveruninstall onlyifdoesntexist
+Source: "..\config\dcp.jsonc"; DestDir: "{code:GetConfigHome}"; Flags: ignoreversion uninsneveruninstall onlyifdoesntexist
 Source: "..\config\commands\*"; DestDir: "{code:GetConfigHome}\commands"; Flags: ignoreversion recursesubdirs createallsubdirs uninsneveruninstall onlyifdoesntexist
 Source: "..\config\plugins\*"; DestDir: "{code:GetConfigHome}\plugins"; Flags: ignoreversion recursesubdirs createallsubdirs uninsneveruninstall; Excludes: "node_modules\*"
 ; Starter template only — never overwrite an existing (possibly filled-in) file.

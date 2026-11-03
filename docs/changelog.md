@@ -9,6 +9,43 @@ Version 1.0.0 was published to npm but never got a git tag, so it has no tag
 range. The npm publish timestamps are UTC and can sit a day earlier than the
 commit date of the same version.
 
+## [1.4.7] - 2026-11-01
+
+### Fixed
+
+- The installer now upgrades an existing `dcp.jsonc` in place when it lacks
+  `experimental.allowSubAgents`. The DCP plugin itself writes a stub file at
+  load, so the previous install-if-missing rule never delivered the gate
+  settings on an already-started host. A correct existing file is left
+  byte-for-byte untouched, and the config-home resolution now matches the
+  plugin's own (`XDG_CONFIG_HOME`, legacy `OPENCODE_CONFIG_HOME` as opt-in,
+  then `~/.config/opencode`).
+- Compression now works inside agent lanes. DCP refuses every compression path
+  in a subagent session while `experimental.allowSubAgents` is `false`, and
+  `false` is its default, so `/dcp-compress` answered `DCP compression is
+  disabled in subagents` and the automatic nudges never fired there. Agent
+  lanes are subagent sessions - every child of orchestrator, fixer, designer or
+  explorer carries a `parentID` - so on a configuration that dispatches its
+  work to lanes, every compression attempt was dead in exactly those sessions.
+  The template now ships `config/dcp.jsonc` with
+  `"experimental": { "allowSubAgents": true }`, installed to the config home as
+  `dcp.jsonc` only when that file is missing, and the Windows installer carries
+  it in both the payload and the live deployment.
+- DCP reads its config at load, so the shipped file reaches the next start of
+  the host rather than the next turn. `docs/tech_stack.md` records that
+  restart requirement next to the key.
+
+### Changed
+
+- Agent-lane turns now carry DCP's system prompt and its automatic nudges.
+  While `experimental.allowSubAgents` was false, DCP skipped the system prompt
+  injection for a subagent session, so a lane turn had no compression guidance
+  and no message-id tags. Enabling the key turns both on: every lane turn pays
+  that prompt's context, and the nudges can fire inside a lane.
+- A completed `task` or `subagent` tool output can now be carried into a
+  compression summary, because the same key enables the protected-tool
+  extension for those tools.
+
 ## [1.4.6] - 2026-10-30
 
 ### Fixed
