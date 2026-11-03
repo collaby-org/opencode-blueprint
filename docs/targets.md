@@ -62,9 +62,15 @@ outside this repository has to move first.
   `localhost:20128`, and opencode Zen with the key from the environment.
 - [done] The default model is `opencode/muse-spark-1.3-contributor-free`.
 - [done] The template carries the v2 stream compatibility override for
-  nvidia (`requireFinishReason: false`, ten minute `chunkTimeout`), so a
-  streamed reply that ends without a terminal `finish_reason` frame no longer
-  fails the turn or the compaction summary that rides on it (1.4.5).
+  nvidia (`requireFinishReason: false`), so a streamed reply that ends without
+  a terminal `finish_reason` frame no longer fails the turn or the compaction
+  summary that rides on it (1.4.5).
+- [done] The template keeps both timeout windows at or above opencode's stock
+  values - `headerTimeout: 600000`, `chunkTimeout: 1800000` - because a
+  `chunkTimeout` below stock aborts a slow NVIDIA reasoning turn with
+  `Timed out waiting for response data` (a sub-stock `headerTimeout` instead
+  fails earlier with `Timed out waiting for response headers`). Both are
+  provider-level only; a model-level override is silently ignored (1.4.6).
 
 ## Plugins
 

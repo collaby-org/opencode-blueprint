@@ -1,0 +1,12 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Opencode-DCP/opencode-dynamic-context-pruning/master/dcp.schema.json",
+  // DCP refuses every compression path in a subagent session while this stays
+  // false, and false is its default: /dcp-compress answers
+  // "DCP compression is disabled in subagents" and the automatic nudges never
+  // fire. Agent lanes are subagent sessions (every child of orchestrator,
+  // fixer, designer, explorer, ... carries a parentID), so on a setup that
+  // dispatches its work to lanes every compression attempt is dead there.
+  // Verified on the vendored 3.2.0: the same command sent to the running
+  // server returns CommandExecutionError with that exact message.
+  "experimental": { "allowSubAgents": true }
+}

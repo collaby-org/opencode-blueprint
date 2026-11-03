@@ -1730,7 +1730,7 @@ function getCurrentParams(state, messages, logger) {
   const variant = userInfo.model.variant;
   return { providerId, modelId, agent, variant };
 }
-function countTokens2(text) {
+function countTokens(text) {
   if (!text) return 0;
   try {
     return anthropicCountTokens(text);
@@ -1740,7 +1740,7 @@ function countTokens2(text) {
 }
 function estimateTokensBatch(texts) {
   if (texts.length === 0) return 0;
-  return countTokens2(texts.join(" "));
+  return countTokens(texts.join(" "));
 }
 var COMPACTED_TOOL_OUTPUT_PLACEHOLDER = "[Old tool result content cleared]";
 function stringifyToolContent(value) {
@@ -1966,6 +1966,58 @@ function allocateNextMessageRef(state) {
   throw new Error(
     `Message ID alias capacity exceeded. Cannot allocate more than ${formatMessageRef(max, state.idFormat)} aliases in this session.`
   );
+}
+
+// lib/compress/args.ts
+var NON_EMPTY_ARRAY_ERROR_MESSAGE = "content is required and must be a non-empty array";
+function isStringFields(value, keys) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const record = value;
+  return keys.every((key) => typeof record[key] === "string");
+}
+function coerceContentArray(raw, isEntry, guidance) {
+  if (Array.isArray(raw)) {
+    return raw;
+  }
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+      let parsed;
+      try {
+        parsed = JSON.parse(trimmed);
+      } catch {
+        parsed = void 0;
+      }
+      if (Array.isArray(parsed)) {
+        if (parsed.length === 0) {
+          throw new Error(NON_EMPTY_ARRAY_ERROR_MESSAGE);
+        }
+        return parsed;
+      }
+      if (isEntry(parsed)) {
+        return [parsed];
+      }
+    }
+    throw new Error(`content must be a JSON array, not a plain string. ${guidance}`);
+  }
+  if (raw !== null && typeof raw === "object" && isEntry(raw)) {
+    return [raw];
+  }
+  throw new Error(NON_EMPTY_ARRAY_ERROR_MESSAGE);
+}
+function normalizeCompressArgs(args, spec) {
+  if (args === null || typeof args !== "object" || Array.isArray(args)) {
+    throw new Error(
+      `compress takes a JSON object with "topic" (string) and "content" (array of ${spec.contentNoun}). Re-send as: ${spec.shapeExample}`
+    );
+  }
+  const { topic, content } = args;
+  return {
+    topic,
+    content: coerceContentArray(content, spec.isEntry, spec.contentGuidance)
+  };
 }
 
 // lib/compress/search.ts
@@ -2236,6 +2288,29 @@ ${body}
 
 ${footer}`;
 }
+function selectionTokenCost(selection, messagesState) {
+  let total = 0;
+  for (const tokens of selection.messageTokenById.values()) {
+    total += tokens;
+  }
+  for (const blockId of selection.requiredBlockIds) {
+    const block = messagesState.blocksById.get(blockId);
+    if (block) {
+      total += block.summaryTokens || 0;
+    }
+  }
+  return total;
+}
+var MIN_GUARDED_INPUT_TOKENS = 2e3;
+function assertCompressionShrinksContext(summaryTokens, inputTokens, boundaryLabel, idFormat = "xml") {
+  if (inputTokens < MIN_GUARDED_INPUT_TOKENS || summaryTokens < inputTokens) {
+    return;
+  }
+  const id = idFormat === "compact" ? `@${boundaryLabel}@` : boundaryLabel;
+  throw new Error(
+    `Refusing to compress ${id}: the summary is ~${summaryTokens} tokens but the content it would replace is only ~${inputTokens} tokens. A compression has to shrink the context. Choose a wider range, or leave this content uncompressed.`
+  );
+}
 function applyCompressionState(state, input, selection, anchorMessageId, blockId, summary, consumedBlockIds) {
   const messagesState = state.prune.messages;
   const consumed = [...new Set(consumedBlockIds.filter((id) => Number.isInteger(id) && id > 0))];
@@ -2408,59 +2483,20 @@ function applyCompressionState(state, input, selection, anchorMessageId, blockId
   };
 }
 
-// lib/compress/args.ts
-var NON_EMPTY_ARRAY_ERROR_MESSAGE = "content is required and must be a non-empty array";
-function isStringFields(value, keys) {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    return false;
-  }
-  const record = value;
-  return keys.every((key) => typeof record[key] === "string");
-}
-function coerceContentArray(raw, isEntry, guidance) {
-  if (Array.isArray(raw)) {
-    return raw;
-  }
-  if (typeof raw === "string") {
-    const trimmed = raw.trim();
-    if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
-      let parsed;
-      try {
-        parsed = JSON.parse(trimmed);
-      } catch {
-        parsed = void 0;
-      }
-      if (Array.isArray(parsed)) {
-        if (parsed.length === 0) {
-          throw new Error(NON_EMPTY_ARRAY_ERROR_MESSAGE);
-        }
-        return parsed;
-      }
-      if (isEntry(parsed)) {
-        return [parsed];
-      }
-    }
-    throw new Error(`content must be a JSON array, not a plain string. ${guidance}`);
-  }
-  if (raw !== null && typeof raw === "object" && isEntry(raw)) {
-    return [raw];
-  }
-  throw new Error(NON_EMPTY_ARRAY_ERROR_MESSAGE);
-}
-function normalizeCompressArgs(args, spec) {
-  if (args === null || typeof args !== "object" || Array.isArray(args)) {
-    throw new Error(
-      `compress takes a JSON object with "topic" (string) and "content" (array of ${spec.contentNoun}). Re-send as: ${spec.shapeExample}`
-    );
-  }
-  const { topic, content } = args;
-  return {
-    topic,
-    content: coerceContentArray(content, spec.isEntry, spec.contentGuidance)
-  };
-}
-
 // lib/compress/message-utils.ts
+var MESSAGE_ENTRY_KEYS = ["messageId", "topic", "summary"];
+function isMessageEntry(value) {
+  return isStringFields(value, MESSAGE_ENTRY_KEYS);
+}
+var MESSAGE_CONTENT_GUIDANCE = 're-send with content as an array of message objects: [{ "messageId": "m0001", "topic": "...", "summary": "..." }]. messageId must be the message ID (mNNNN), visible as a <dcp-message-id> tag in context, that your summary covers. A summary string alone does not say which message to replace.';
+function normalizeMessageArgs(args) {
+  return normalizeCompressArgs(args, {
+    isEntry: isMessageEntry,
+    contentNoun: "messages",
+    shapeExample: '{ "topic": "...", "content": [{ "messageId": "m0001", "topic": "...", "summary": "..." }] }',
+    contentGuidance: MESSAGE_CONTENT_GUIDANCE
+  });
+}
 var SoftIssue = class extends Error {
   constructor(kind, messageId, message) {
     super(message);
@@ -2470,25 +2506,12 @@ var SoftIssue = class extends Error {
   kind;
   messageId;
 };
-var MESSAGE_ENTRY_KEYS = ["messageId", "topic", "summary"];
-function isMessageEntry(value) {
-  return isStringFields(value, MESSAGE_ENTRY_KEYS);
-}
-var MESSAGE_CONTENT_GUIDANCE = 're-send with content as an array of message objects: [{ "messageId": "m0001", "topic": "...", "summary": "..." }]. ' + "messageId must be the message ID (mNNNN), visible as a <dcp-message-id> tag in context, that your summary covers. " + "A summary string alone does not say which message to replace.";
-function normalizeMessageArgs(args) {
-  return normalizeCompressArgs(args, {
-    isEntry: isMessageEntry,
-    contentNoun: "messages",
-    shapeExample: '{ "topic": "...", "content": [{ "messageId": "m0001", "topic": "...", "summary": "..." }] }',
-    contentGuidance: MESSAGE_CONTENT_GUIDANCE
-  });
-}
 function validateArgs(args) {
   if (typeof args.topic !== "string" || args.topic.trim().length === 0) {
     throw new Error("topic is required and must be a non-empty string");
   }
   if (!Array.isArray(args.content) || args.content.length === 0) {
-    throw new Error("content is required and must be a non-empty array");
+    throw new Error(NON_EMPTY_ARRAY_ERROR_MESSAGE);
   }
   for (let index = 0; index < args.content.length; index++) {
     const entry = args.content[index];
@@ -2811,7 +2834,7 @@ function loadPruneMessagesState(persisted) {
         active: block.active === true,
         deactivatedByUser: block.deactivatedByUser === true,
         compressedTokens: typeof block.compressedTokens === "number" && Number.isFinite(block.compressedTokens) ? Math.max(0, block.compressedTokens) : 0,
-        summaryTokens: typeof block.summaryTokens === "number" && Number.isFinite(block.summaryTokens) ? Math.max(0, block.summaryTokens) : typeof block.summary === "string" ? countTokens2(block.summary) : 0,
+        summaryTokens: typeof block.summaryTokens === "number" && Number.isFinite(block.summaryTokens) ? Math.max(0, block.summaryTokens) : typeof block.summary === "string" ? countTokens(block.summary) : 0,
         durationMs: typeof block.durationMs === "number" && Number.isFinite(block.durationMs) ? Math.max(0, block.durationMs) : 0,
         mode: block.mode === "range" || block.mode === "message" ? block.mode : void 0,
         topic: typeof block.topic === "string" ? block.topic : "",
@@ -3195,6 +3218,7 @@ function createSessionState(idFormat = "xml") {
     manualMode: false,
     compressPermission: void 0,
     pendingManualTrigger: null,
+    consumedManualTrigger: null,
     prune: {
       tools: /* @__PURE__ */ new Map(),
       messages: createPruneMessagesState()
@@ -3232,6 +3256,7 @@ function resetSessionState(state) {
   state.manualMode = false;
   state.compressPermission = void 0;
   state.pendingManualTrigger = null;
+  state.consumedManualTrigger = null;
   state.prune = {
     tools: /* @__PURE__ */ new Map(),
     messages: createPruneMessagesState()
@@ -3305,9 +3330,6 @@ async function refreshManualMode(state, sessionId, logger, manualModeDefault) {
   state.manualMode = enabled ? "active" : false;
 }
 
-// lib/state/tool-cache.ts
-var MAX_TOOL_CACHE_SIZE = 1e3;
-
 // lib/tool-ids.ts
 function getAmbiguousToolIds(messages) {
   const seen = /* @__PURE__ */ new Set();
@@ -3325,6 +3347,9 @@ function getAmbiguousToolIds(messages) {
 function toolOccurrenceKey(message, part) {
   return JSON.stringify([message.info.id, part.id ?? part.callID]);
 }
+
+// lib/state/tool-cache.ts
+var MAX_TOOL_CACHE_SIZE = 1e3;
 function syncToolCache(state, config, logger, messages) {
   try {
     logger.info("Syncing tool parameters from OpenCode messages");
@@ -3830,7 +3855,7 @@ function cacheSystemPromptTokens(state, messages) {
     }
     break;
   }
-  const estimatedSystemTokens = Math.max(0, firstInputTokens - countTokens2(firstUserText));
+  const estimatedSystemTokens = Math.max(0, firstInputTokens - countTokens(firstUserText));
   state.systemPromptTokens = estimatedSystemTokens > 0 ? estimatedSystemTokens : void 0;
 }
 function shortenPath(input, workingDirectory) {
@@ -4098,6 +4123,7 @@ async function prepareSession(ctx, toolCtx, title) {
 async function resetCompressPending(ctx, toolCtx) {
   if (ctx.state.manualMode === "compress-pending") {
     ctx.state.manualMode = false;
+    ctx.state.consumedManualTrigger = null;
     await refreshManualMode(
       ctx.state,
       toolCtx.sessionID,
@@ -4347,85 +4373,91 @@ function createCompressMessageTool(ctx) {
     args: buildSchema(ctx.state.idFormat),
     async execute(args, toolCtx) {
       try {
-      const input = normalizeMessageArgs(args);
-      validateArgs(input);
-      const callId = typeof toolCtx.callID === "string" ? toolCtx.callID : void 0;
-      const { rawMessages, searchContext } = await prepareSession(
-        ctx,
-        toolCtx,
-        `Compress Message: ${input.topic}`
-      );
-      const { plans, skippedIssues, skippedCount } = resolveMessages(
-        input,
-        searchContext,
-        ctx.state,
-        ctx.config
-      );
-      if (plans.length === 0 && skippedCount > 0) {
-        throw new Error(formatIssues(skippedIssues, skippedCount));
-      }
-      const notifications = [];
-      const preparedPlans = [];
-      for (const plan of plans) {
-        const summaryWithPromptInfo = appendProtectedPromptInfo(
-          plan.entry.summary,
-          plan.selection,
+        const input = normalizeMessageArgs(args);
+        validateArgs(input);
+        const callId = typeof toolCtx.callID === "string" ? toolCtx.callID : void 0;
+        const { rawMessages, searchContext } = await prepareSession(
+          ctx,
+          toolCtx,
+          `Compress Message: ${input.topic}`
+        );
+        const { plans, skippedIssues, skippedCount } = resolveMessages(
+          input,
           searchContext,
           ctx.state,
-          ctx.config.compress.protectTags
+          ctx.config
         );
-        const summaryWithTools = await appendProtectedTools(
-          ctx.client,
-          ctx.state,
-          ctx.config.experimental.allowSubAgents,
-          summaryWithPromptInfo,
-          plan.selection,
-          searchContext,
-          ctx.config.compress.protectedTools,
-          ctx.config.protectedFilePatterns
-        );
-        preparedPlans.push({
-          plan,
-          summaryWithTools
-        });
-      }
-      const runId = allocateRunId(ctx.state);
-      for (const { plan, summaryWithTools } of preparedPlans) {
-        const blockId = allocateBlockId(ctx.state);
-        const storedSummary = wrapCompressedSummary(
-          blockId,
-          summaryWithTools,
-          ctx.state.idFormat
-        );
-        const summaryTokens = countTokens2(storedSummary);
-        applyCompressionState(
-          ctx.state,
-          {
-            topic: plan.entry.topic,
-            batchTopic: input.topic,
-            startId: plan.entry.messageId,
-            endId: plan.entry.messageId,
-            mode: "message",
+        if (plans.length === 0 && skippedCount > 0) {
+          throw new Error(formatIssues(skippedIssues, skippedCount));
+        }
+        const notifications = [];
+        const preparedPlans = [];
+        for (const plan of plans) {
+          const summaryWithPromptInfo = appendProtectedPromptInfo(
+            plan.entry.summary,
+            plan.selection,
+            searchContext,
+            ctx.state,
+            ctx.config.compress.protectTags
+          );
+          const summaryWithTools = await appendProtectedTools(
+            ctx.client,
+            ctx.state,
+            ctx.config.experimental.allowSubAgents,
+            summaryWithPromptInfo,
+            plan.selection,
+            searchContext,
+            ctx.config.compress.protectedTools,
+            ctx.config.protectedFilePatterns
+          );
+          preparedPlans.push({
+            plan,
+            summaryWithTools
+          });
+        }
+        const runId = allocateRunId(ctx.state);
+        for (const { plan, summaryWithTools } of preparedPlans) {
+          const blockId = allocateBlockId(ctx.state);
+          const storedSummary = wrapCompressedSummary(
+            blockId,
+            summaryWithTools,
+            ctx.state.idFormat
+          );
+          const summaryTokens = countTokens(storedSummary);
+          assertCompressionShrinksContext(
+            summaryTokens,
+            selectionTokenCost(plan.selection, ctx.state.prune.messages),
+            plan.entry.messageId,
+            ctx.state.idFormat
+          );
+          applyCompressionState(
+            ctx.state,
+            {
+              topic: plan.entry.topic,
+              batchTopic: input.topic,
+              startId: plan.entry.messageId,
+              endId: plan.entry.messageId,
+              mode: "message",
+              runId,
+              compressMessageId: toolCtx.messageID,
+              compressCallId: callId,
+              summaryTokens
+            },
+            plan.selection,
+            plan.anchorMessageId,
+            blockId,
+            storedSummary,
+            []
+          );
+          notifications.push({
+            blockId,
             runId,
-            compressMessageId: toolCtx.messageID,
-            compressCallId: callId,
+            summary: summaryWithTools,
             summaryTokens
-          },
-          plan.selection,
-          plan.anchorMessageId,
-          blockId,
-          storedSummary,
-          []
-        );
-        notifications.push({
-          blockId,
-          runId,
-          summary: summaryWithTools,
-          summaryTokens
-        });
-      }
-      await finalizeSession(ctx, toolCtx, rawMessages, notifications, input.topic);
-      return formatResult(plans.length, skippedIssues, skippedCount);
+          });
+        }
+        await finalizeSession(ctx, toolCtx, rawMessages, notifications, input.topic);
+        return formatResult(plans.length, skippedIssues, skippedCount);
       } finally {
         await resetCompressPending(ctx, toolCtx);
       }
@@ -4442,7 +4474,7 @@ var RANGE_ENTRY_KEYS = ["startId", "endId", "summary"];
 function isRangeEntry(value) {
   return isStringFields(value, RANGE_ENTRY_KEYS);
 }
-var RANGE_CONTENT_GUIDANCE = 're-send with content as an array of range objects: [{ "startId": "m0001", "endId": "m0031", "summary": "..." }]. ' + "startId and endId must be the message (mNNNN) or compressed-block (bN) IDs, visible as <dcp-message-id> tags in context, " + "that bound the range your summary covers. A summary string alone does not say which messages to replace.";
+var RANGE_CONTENT_GUIDANCE = 're-send with content as an array of range objects: [{ "startId": "m0001", "endId": "m0031", "summary": "..." }]. startId and endId must be the message (mNNNN) or compressed-block (bN) IDs, visible as <dcp-message-id> tags in context, that bound the range your summary covers. A summary string alone does not say which messages to replace.';
 function normalizeRangeArgs(args) {
   return normalizeCompressArgs(args, {
     isEntry: isRangeEntry,
@@ -4456,7 +4488,7 @@ function validateArgs2(args) {
     throw new Error("topic is required and must be a non-empty string");
   }
   if (!Array.isArray(args.content) || args.content.length === 0) {
-    throw new Error("content is required and must be a non-empty array");
+    throw new Error(NON_EMPTY_ARRAY_ERROR_MESSAGE);
   }
   for (let index = 0; index < args.content.length; index++) {
     const entry = args.content[index];
@@ -4701,115 +4733,121 @@ function createCompressRangeTool(ctx) {
     args: buildSchema2(ctx.state.idFormat),
     async execute(args, toolCtx) {
       try {
-      const input = normalizeRangeArgs(args);
-      validateArgs2(input);
-      const callId = typeof toolCtx.callID === "string" ? toolCtx.callID : void 0;
-      const { rawMessages, searchContext } = await prepareSession(
-        ctx,
-        toolCtx,
-        `Compress Range: ${input.topic}`
-      );
-      const resolvedPlans = resolveRanges(input, searchContext, ctx.state);
-      validateNonOverlapping(resolvedPlans);
-      const notifications = [];
-      const preparedPlans = [];
-      let totalCompressedMessages = 0;
-      for (const plan of resolvedPlans) {
-        const parsedPlaceholders = parseBlockPlaceholders(
-          plan.entry.summary,
-          ctx.state.idFormat
+        const input = normalizeRangeArgs(args);
+        validateArgs2(input);
+        const callId = typeof toolCtx.callID === "string" ? toolCtx.callID : void 0;
+        const { rawMessages, searchContext } = await prepareSession(
+          ctx,
+          toolCtx,
+          `Compress Range: ${input.topic}`
         );
-        const missingBlockIds = validateSummaryPlaceholders(
-          parsedPlaceholders,
-          plan.selection.requiredBlockIds,
-          plan.selection.startReference,
-          plan.selection.endReference,
-          searchContext.summaryByBlockId
-        );
-        const injected = injectBlockPlaceholders(
-          plan.entry.summary,
-          parsedPlaceholders,
-          searchContext.summaryByBlockId,
-          plan.selection.startReference,
-          plan.selection.endReference
-        );
-        const summaryWithUsers = appendProtectedUserMessages(
-          injected.expandedSummary,
-          plan.selection,
-          searchContext,
-          ctx.state,
-          ctx.config.compress.protectUserMessages
-        );
-        const summaryWithPromptInfo = appendProtectedPromptInfo(
-          summaryWithUsers,
-          plan.selection,
-          searchContext,
-          ctx.state,
-          ctx.config.compress.protectTags
-        );
-        const summaryWithTools = await appendProtectedTools(
-          ctx.client,
-          ctx.state,
-          ctx.config.experimental.allowSubAgents,
-          summaryWithPromptInfo,
-          plan.selection,
-          searchContext,
-          ctx.config.compress.protectedTools,
-          ctx.config.protectedFilePatterns
-        );
-        const completedSummary = appendMissingBlockSummaries(
-          summaryWithTools,
-          missingBlockIds,
-          searchContext.summaryByBlockId,
-          injected.consumedBlockIds,
-          ctx.state.idFormat
-        );
-        preparedPlans.push({
-          entry: plan.entry,
-          selection: plan.selection,
-          anchorMessageId: plan.anchorMessageId,
-          finalSummary: completedSummary.expandedSummary,
-          consumedBlockIds: completedSummary.consumedBlockIds
-        });
-      }
-      const runId = allocateRunId(ctx.state);
-      for (const preparedPlan of preparedPlans) {
-        const blockId = allocateBlockId(ctx.state);
-        const storedSummary = wrapCompressedSummary(
-          blockId,
-          preparedPlan.finalSummary,
-          ctx.state.idFormat
-        );
-        const summaryTokens = countTokens2(storedSummary);
-        const applied = applyCompressionState(
-          ctx.state,
-          {
-            topic: input.topic,
-            batchTopic: input.topic,
-            startId: preparedPlan.entry.startId,
-            endId: preparedPlan.entry.endId,
-            mode: "range",
+        const resolvedPlans = resolveRanges(input, searchContext, ctx.state);
+        validateNonOverlapping(resolvedPlans);
+        const notifications = [];
+        const preparedPlans = [];
+        let totalCompressedMessages = 0;
+        for (const plan of resolvedPlans) {
+          const parsedPlaceholders = parseBlockPlaceholders(
+            plan.entry.summary,
+            ctx.state.idFormat
+          );
+          const missingBlockIds = validateSummaryPlaceholders(
+            parsedPlaceholders,
+            plan.selection.requiredBlockIds,
+            plan.selection.startReference,
+            plan.selection.endReference,
+            searchContext.summaryByBlockId
+          );
+          const injected = injectBlockPlaceholders(
+            plan.entry.summary,
+            parsedPlaceholders,
+            searchContext.summaryByBlockId,
+            plan.selection.startReference,
+            plan.selection.endReference
+          );
+          const summaryWithUsers = appendProtectedUserMessages(
+            injected.expandedSummary,
+            plan.selection,
+            searchContext,
+            ctx.state,
+            ctx.config.compress.protectUserMessages
+          );
+          const summaryWithPromptInfo = appendProtectedPromptInfo(
+            summaryWithUsers,
+            plan.selection,
+            searchContext,
+            ctx.state,
+            ctx.config.compress.protectTags
+          );
+          const summaryWithTools = await appendProtectedTools(
+            ctx.client,
+            ctx.state,
+            ctx.config.experimental.allowSubAgents,
+            summaryWithPromptInfo,
+            plan.selection,
+            searchContext,
+            ctx.config.compress.protectedTools,
+            ctx.config.protectedFilePatterns
+          );
+          const completedSummary = appendMissingBlockSummaries(
+            summaryWithTools,
+            missingBlockIds,
+            searchContext.summaryByBlockId,
+            injected.consumedBlockIds,
+            ctx.state.idFormat
+          );
+          preparedPlans.push({
+            entry: plan.entry,
+            selection: plan.selection,
+            anchorMessageId: plan.anchorMessageId,
+            finalSummary: completedSummary.expandedSummary,
+            consumedBlockIds: completedSummary.consumedBlockIds
+          });
+        }
+        const runId = allocateRunId(ctx.state);
+        for (const preparedPlan of preparedPlans) {
+          const blockId = allocateBlockId(ctx.state);
+          const storedSummary = wrapCompressedSummary(
+            blockId,
+            preparedPlan.finalSummary,
+            ctx.state.idFormat
+          );
+          const summaryTokens = countTokens(storedSummary);
+          assertCompressionShrinksContext(
+            summaryTokens,
+            selectionTokenCost(preparedPlan.selection, ctx.state.prune.messages),
+            `${preparedPlan.entry.startId}..${preparedPlan.entry.endId}`,
+            ctx.state.idFormat
+          );
+          const applied = applyCompressionState(
+            ctx.state,
+            {
+              topic: input.topic,
+              batchTopic: input.topic,
+              startId: preparedPlan.entry.startId,
+              endId: preparedPlan.entry.endId,
+              mode: "range",
+              runId,
+              compressMessageId: toolCtx.messageID,
+              compressCallId: callId,
+              summaryTokens
+            },
+            preparedPlan.selection,
+            preparedPlan.anchorMessageId,
+            blockId,
+            storedSummary,
+            preparedPlan.consumedBlockIds
+          );
+          totalCompressedMessages += applied.messageIds.length;
+          notifications.push({
+            blockId,
             runId,
-            compressMessageId: toolCtx.messageID,
-            compressCallId: callId,
+            summary: preparedPlan.finalSummary,
             summaryTokens
-          },
-          preparedPlan.selection,
-          preparedPlan.anchorMessageId,
-          blockId,
-          storedSummary,
-          preparedPlan.consumedBlockIds
-        );
-        totalCompressedMessages += applied.messageIds.length;
-        notifications.push({
-          blockId,
-          runId,
-          summary: preparedPlan.finalSummary,
-          summaryTokens
-        });
-      }
-      await finalizeSession(ctx, toolCtx, rawMessages, notifications, input.topic);
-      return `Compressed ${totalCompressedMessages} messages into ${COMPRESSED_BLOCK_HEADER}. Compression is a background context-management action, not task completion. Continue your in-progress task from where you left off.`;
+          });
+        }
+        await finalizeSession(ctx, toolCtx, rawMessages, notifications, input.topic);
+        return `Compressed ${totalCompressedMessages} messages into ${COMPRESSED_BLOCK_HEADER}. Compression is a background context-management action, not task completion. Continue your in-progress task from where you left off.`;
       } finally {
         await resetCompressPending(ctx, toolCtx);
       }
@@ -5129,6 +5167,17 @@ USER INTENT FIDELITY
 When the compressed range includes user messages, preserve the user's intent with extra care. Do not change scope, constraints, priorities, acceptance criteria, or requested outcomes.
 Directly quote user messages when they are short enough to include safely. Direct quotes are preferred when they best preserve exact meaning.
 
+TEMPORAL STATUS OF USER MESSAGES
+A compressed range is HISTORY, not the current instruction. A summary sits behind a [Compressed conversation section] header, and anything inside it has already happened.
+
+Approvals, permissions and confirmations are the failure mode here. Text like "go ahead and do it", "yes, do that", "start writing the spec", or a positive answer to a question tool must be recorded as a past event with its position in the timeline, never as a live instruction. Otherwise a later turn can read the summary, see an approval, and act on it - including a PLAN-mode agent starting to modify files after the user has since told it to stop.
+
+- Write it as past tense with its position: "At that point the user approved writing the spec (third turn of this range). The user has not restated this approval since."
+- Never place an approval at the end of the summary, where it reads as the most recent thing the user said.
+- Never end a summary with an imperative sentence taken from a user message.
+- If the range contains both an approval and a later instruction that narrows, overrides or cancels it, state both and make the later one the operative one.
+- If the range ends with a question or an unresolved decision, say that it is unresolved.
+
 Yet be LEAN. Strip away the noise: failed attempts that led nowhere, verbose tool outputs, back-and-forth exploration. What remains should be pure signal - golden nuggets of detail that preserve full understanding with zero ambiguity.
 
 COMPRESSED BLOCK PLACEHOLDERS
@@ -5195,6 +5244,14 @@ Your summary must be EXHAUSTIVE. Capture file paths, function signatures, decisi
 USER INTENT FIDELITY
 When a selected message contains user intent, preserve that intent with extra care. Do not change scope, constraints, priorities, acceptance criteria, or requested outcomes.
 Directly quote short user instructions when that best preserves exact meaning.
+
+TEMPORAL STATUS OF USER MESSAGES
+A summary is HISTORY, not the current instruction.
+
+Approvals, permissions and confirmations are the failure mode here. Text like "go ahead and do it", "yes, do that", or a positive answer to a question tool must be recorded as a past event, never as a live instruction. Otherwise a later turn reads the summary, sees an approval and acts on it - including a PLAN-mode agent starting to modify files after the user has since told it to stop.
+
+- Write it as past tense: "the user approved writing the spec at that point", not "the user approved writing the spec".
+- If a later message in the same batch narrows, overrides or cancels it, make the later one operative and say so.
 
 Yet be LEAN. Strip away the noise: failed attempts that led nowhere, verbose tool output, and repetition. What remains should be pure signal - golden nuggets of detail that preserve full understanding with zero ambiguity.
 If a message contains no significant technical decisions, code changes, or user requirements, produce a minimal one-line summary rather than a detailed one.
@@ -5695,8 +5752,6 @@ var createSyntheticTextPart = (baseMessage, content, stableSeed) => {
     messageID: userInfo.id,
     type: "text",
     text: content,
-    // NOTE: `synthetic: true` hides injected parts from chat rendering
-    // while the model still receives them (verified in host source).
     synthetic: true
   };
 };
@@ -6744,10 +6799,10 @@ function analyzeContextTokens(state, messages) {
   breakdown.toolsInContextCount = toolsInContextCount;
   breakdown.prunedToolCount = prunedToolIds.size;
   breakdown.prunedMessageCount = prunedMessageCount;
-  const firstUserTokens = countTokens2(firstUserText);
-  breakdown.user = countTokens2(userTextParts.join("\n"));
-  const toolInputTokens = countTokens2(toolInputParts.join("\n"));
-  const toolOutputTokens = countTokens2(toolOutputParts.join("\n"));
+  const firstUserTokens = countTokens(firstUserText);
+  breakdown.user = countTokens(userTextParts.join("\n"));
+  const toolInputTokens = countTokens(toolInputParts.join("\n"));
+  const toolOutputTokens = countTokens(toolOutputParts.join("\n"));
   if (firstAssistant) {
     const firstInput = (firstAssistant.tokens?.input || 0) + (firstAssistant.tokens?.cache?.read || 0) + (firstAssistant.tokens?.cache?.write || 0);
     breakdown.system = Math.max(0, firstInput - firstUserTokens);
@@ -7208,6 +7263,7 @@ async function handleManualTriggerCommand(ctx, tool5, userFocus) {
 function applyPendingManualTrigger(state, messages, logger) {
   const pending = state.pendingManualTrigger;
   if (!pending) {
+    releaseStaleManualTrigger(state, messages, logger);
     return;
   }
   if (!state.sessionId || pending.sessionId !== state.sessionId) {
@@ -7225,11 +7281,36 @@ function applyPendingManualTrigger(state, messages, logger) {
       }
       part.text = pending.prompt;
       state.pendingManualTrigger = null;
+      state.consumedManualTrigger = {
+        messageId: msg.info.id,
+        restoreTo: pending.restoreTo
+      };
       logger.debug("Applied manual prompt", { sessionId: pending.sessionId });
       return;
     }
   }
   state.pendingManualTrigger = null;
+}
+function releaseStaleManualTrigger(state, messages, logger) {
+  const consumed = state.consumedManualTrigger;
+  if (!consumed || state.manualMode !== "compress-pending") {
+    return;
+  }
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg.info.role !== "user" || isIgnoredUserMessage(msg)) {
+      continue;
+    }
+    if (msg.info.id === consumed.messageId) {
+      return;
+    }
+    break;
+  }
+  state.manualMode = consumed.restoreTo;
+  state.consumedManualTrigger = null;
+  logger.debug("Released manual trigger that produced no compress", {
+    restored: consumed.restoreTo
+  });
 }
 
 // lib/commands/recompress.ts
@@ -7846,10 +7927,13 @@ function createCommandExecuteHandler(client, state, logger, config, workingDirec
         if (!prompt) {
           throw new Error("__DCP_MANUAL_TRIGGER_BLOCKED__");
         }
+        const restoreTo = state.manualMode === "active" ? "active" : false;
         state.manualMode = "compress-pending";
+        state.consumedManualTrigger = null;
         state.pendingManualTrigger = {
           sessionId: input.sessionID,
-          prompt
+          prompt,
+          restoreTo
         };
         const rawArgs = (input.arguments || "").trim();
         output2.parts.length = 0;
@@ -8537,7 +8621,7 @@ async function setup(ctx) {
         }
         if (state.compressPermission === "deny") delete event.tools.compress;
         state.modelContextLimit = limits.get(`${event.model.providerID}/${event.model.id}`);
-        state.systemPromptTokens = countTokens2(
+        state.systemPromptTokens = countTokens(
           event.system.map((part) => part.text).join("\n")
         );
         const view = project(event.messages, entries, {

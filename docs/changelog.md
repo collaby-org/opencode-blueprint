@@ -9,6 +9,101 @@ Version 1.0.0 was published to npm but never got a git tag, so it has no tag
 range. The npm publish timestamps are UTC and can sit a day earlier than the
 commit date of the same version.
 
+## [1.4.8] - 2026-11-03
+
+### Fixed
+
+- A manual `/dcp-compress` trigger that produced no compression no longer
+  latches the session. The trigger is now released and `manualMode` restored
+  once the next fresh turn arrives (upstream `Tarquinen/opencode-dynamic-context-pruning#645`,
+  unmerged). This is why `/dcp-compress` "stopped working" permanently after
+  one malformed compress call on NVIDIA: the model truncated tool-call
+  arguments mid-JSON, the call never executed, and the pending manual trigger
+  suppressed automatic nudges for the rest of the session.
+- Added the #645 self-healing state (`restoreTo`, `ConsumedManualTrigger`) plus
+  upstream port of non-shrinking compression refusals (#643): a compression
+  whose summary plus required blocks does not shrink the token count now throws
+  a guiding error instead of growing the context, with a 2000-token floor for
+  tiny selections.
+- Prompts now mark compression summaries as temporal history, not live
+  instructions, so the model stops replaying old approvals as current intent
+  (upstream #646, resolves upstream issue #560).
+- Guarded the `event.tools.compress` deletion (#668): another plugin clearing
+  `event.tools` on opencode 2.2.5 aborts compaction with a `TypeError`.
+- `stripHallucinations` no longer strips DCP-style tags from tool outputs
+  (#657): reading a file (including this plugin's own prompts) that quotes a
+  reminder block was silently truncated.
+- Echoed `@id@` tag debris the model copies into replies is cleaned by the
+  upstream #634 echo-removal rules (#632, #562, #642).
+
+## [1.4.7] - 2026-11-01
+
+### Fixed
+
+- The installer now upgrades an existing `dcp.jsonc` in place when it lacks
+  `experimental.allowSubAgents`. The DCP plugin itself writes a stub file at
+  load, so the previous install-if-missing rule never delivered the gate
+  settings on an already-started host. A correct existing file is left
+  byte-for-byte untouched, and the config-home resolution now matches the
+  plugin's own (`XDG_CONFIG_HOME`, legacy `OPENCODE_CONFIG_HOME` as opt-in,
+  then `~/.config/opencode`).
+- Compression now works inside agent lanes. DCP refuses every compression path
+  in a subagent session while `experimental.allowSubAgents` is `false`, and
+  `false` is its default, so `/dcp-compress` answered `DCP compression is
+  disabled in subagents` and the automatic nudges never fired there. Agent
+  lanes are subagent sessions - every child of orchestrator, fixer, designer or
+  explorer carries a `parentID` - so on a configuration that dispatches its
+  work to lanes, every compression attempt was dead in exactly those sessions.
+  The template now ships `config/dcp.jsonc` with
+  `"experimental": { "allowSubAgents": true }`, installed to the config home as
+  `dcp.jsonc` only when that file is missing, and the Windows installer carries
+  it in both the payload and the live deployment.
+- DCP reads its config at load, so the shipped file reaches the next start of
+  the host rather than the next turn. `docs/tech_stack.md` records that
+  restart requirement next to the key.
+
+### Changed
+
+- Agent-lane turns now carry DCP's system prompt and its automatic nudges.
+  While `experimental.allowSubAgents` was false, DCP skipped the system prompt
+  injection for a subagent session, so a lane turn had no compression guidance
+  and no message-id tags. Enabling the key turns both on: every lane turn pays
+  that prompt's context, and the nudges can fire inside a lane.
+- A completed `task` or `subagent` tool output can now be carried into a
+  compression summary, because the same key enables the protected-tool
+  extension for those tools.
+
+## [1.4.6] - 2026-10-30
+
+### Fixed
+
+- Slow NVIDIA reasoning turns no longer die with `Timed out waiting for response
+  data`, and a session that hit this before keeps working without being
+  recreated. That message is the transport's inter-chunk timeout
+  (`chunkTimeout`), applied to the raw byte stream before SSE framing; it resets
+  with every received chunk, so it bounds a single silent gap rather than the
+  total duration of a turn. `stepfun-ai/step-5-preview` takes about 60 s to send
+  response headers and then streams nothing for 173 s before the first token,
+  with no keepalive frames, so the silence alone nearly fills a 180 s window and
+  any slower run crosses it; run-to-run latency varies by well over a minute.
+  opencode's stock `chunkTimeout` is 900000 ms and its stock `headerTimeout` is
+  300000 ms. The template had shipped 600000 ms - below the stock chunk window -
+  and the config in use had drifted down to 180000 ms. The template now ships
+  `headerTimeout: 600000` and `chunkTimeout: 1800000`, and a config reload
+  reaches the next turn of every session because the values are resolved per
+  request from the provider entry.
+- The stream compatibility note in `docs/tech_stack.md` no longer calls
+  300000 ms the `chunkTimeout` default. It is the `headerTimeout` default, and
+  the wrong number is what made the previous override look generous instead of
+  sub-default.
+
+### Changed
+
+- `headerTimeout` and `chunkTimeout` are read from the provider entry only.
+  A model-level `providers.<id>.models.<model>.settings.chunkTimeout` is
+  silently ignored on 2.2.4 (a 5000 ms model window still produced a full
+  answer), so the template ships no per-model override.
+
 ## [1.4.5] - 2026-10-25
 
 ### Fixed

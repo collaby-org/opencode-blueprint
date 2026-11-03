@@ -5,3 +5,4 @@ type ToolPart = Extract<WithParts["parts"][number], {
 export declare function getAmbiguousToolIds(messages: WithParts[]): Set<string>;
 export declare function toolOccurrenceKey(message: WithParts, part: ToolPart): string;
 export {};
+//# sourceMappingURL=tool-ids.d.ts.map

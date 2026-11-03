@@ -19,9 +19,23 @@
       // Accept a stream that ends without finish_reason instead of failing the
       // turn. Trade-off: a genuinely truncated reply is then reported as stop.
       "compatibility": { "requireFinishReason": false },
-      // A reasoning model can think for a long time between chunks; the
-      // default inter-chunk timeout is 5 minutes.
-      "settings": { "chunkTimeout": 600000 }
+      // opencode's stock defaults are headerTimeout 300000 and chunkTimeout
+      // 900000. The header window bounds the wait for response headers, the
+      // chunk window the gap between raw streamed bytes before SSE framing.
+      // NVIDIA spends about a minute before the headers and then streams
+      // nothing at all while a reasoning model thinks (measured on
+      // step-5-preview: 60s to headers, 173s of silence before the first token,
+      // no keepalive frames), so a chunkTimeout below stock aborts the turn with
+      // "Timed out waiting for response data".
+      //
+      // Both keys are honored only on the provider entry. The same key under
+      // providers.<id>.models.<model>.settings is silently ignored in 2.2.4
+      // (verified: a 5000 ms model-level window still produced a full answer),
+      // so there is no per-model override here.
+      "settings": {
+        "headerTimeout": 600000,
+        "chunkTimeout": 1800000
+      }
     }
   },
   "provider": {
