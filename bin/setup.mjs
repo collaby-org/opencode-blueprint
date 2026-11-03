@@ -11,8 +11,13 @@ import { fileURLToPath } from "node:url";
 
 const DRY = process.argv.includes("--dry-run");
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
+// Match the DCP plugin's own global-config resolution: it reads
+// XDG_CONFIG_HOME (with an `opencode` subdirectory) and otherwise falls back
+// to ~/.config/opencode. It never consults OPENCODE_CONFIG_HOME, so honoring
+// that variable here put installations somewhere DCP does not read.
 const TARGET =
-  process.env.OPENCODE_CONFIG_HOME ||
+  (process.env.XDG_CONFIG_HOME && join(process.env.XDG_CONFIG_HOME, "opencode")) ||
+  process.env.OPENCODE_CONFIG_HOME || // legacy override, kept as an explicit opt-in
   join(homedir(), ".config", "opencode");
 const SKILLS_DIR = join(homedir(), ".agents", "skills");
 
@@ -176,6 +181,165 @@ const parseJsonc = (text) => {
     out += c;
   }
   return JSON.parse(out);
+};
+
+// --------------------------------------------------- jsonc object locations
+// The DCP config is content-specific: an existing file may already contain
+// unrelated settings and comments. These helpers locate the object boundaries
+// in the original JSONC text so one missing setting can be inserted without
+// round-tripping the file through JSON.stringify (which would delete every
+// comment and rewrite the user's formatting).
+const skipJsoncTrivia = (text, start) => {
+  let i = start;
+  while (i < text.length) {
+    if (/\s/.test(text[i])) {
+      i++;
+      continue;
+    }
+    if (text.startsWith("//", i)) {
+      const end = text.indexOf("\n", i + 2);
+      i = end === -1 ? text.length : end + 1;
+      continue;
+    }
+    if (text.startsWith("/*", i)) {
+      const end = text.indexOf("*/", i + 2);
+      i = end === -1 ? text.length : end + 2;
+      continue;
+    }
+    break;
+  }
+  return i;
+};
+
+const jsoncStringEnd = (text, start) => {
+  let i = start + 1;
+  let escaped = false;
+  while (i < text.length) {
+    const c = text[i];
+    if (escaped) {
+      escaped = false;
+      i++;
+      continue;
+    }
+    if (c === "\\") {
+      escaped = true;
+      i++;
+      continue;
+    }
+    if (c === "\"") return i + 1;
+    i++;
+  }
+  throw new Error("unterminated JSONC string");
+};
+
+const findJsoncObject = (text, start) => {
+  if (text[start] !== "{") throw new Error("expected a JSONC object");
+  const members = [];
+  let i = start + 1;
+  while (i < text.length) {
+    i = skipJsoncTrivia(text, i);
+    if (text[i] === "}") return { open: start, close: i, members };
+    if (text[i] !== "\"") throw new Error("expected a JSONC object member");
+    const keyStart = i;
+    const keyEnd = jsoncStringEnd(text, i);
+    const key = JSON.parse(text.slice(keyStart, keyEnd));
+    i = skipJsoncTrivia(text, keyEnd);
+    if (text[i] !== ":") throw new Error("expected ':' after a JSONC object member");
+    i = skipJsoncTrivia(text, i + 1);
+    const valueStart = i;
+    const valueEnd = skipJsoncValue(text, i);
+    members.push({ key, keyStart, valueStart, valueEnd });
+    i = skipJsoncTrivia(text, valueEnd);
+    if (text[i] === ",") {
+      i++;
+      continue;
+    }
+    if (text[i] === "}") return { open: start, close: i, members };
+    throw new Error("expected ',' or '}' in a JSONC object");
+  }
+  throw new Error("unterminated JSONC object");
+};
+
+const skipJsoncValue = (text, start) => {
+  let i = skipJsoncTrivia(text, start);
+  if (text[i] === "\"") return jsoncStringEnd(text, i);
+  if (text[i] === "{") return findJsoncObject(text, i).close + 1;
+  if (text[i] === "[") {
+    i++;
+    while (i < text.length) {
+      i = skipJsoncTrivia(text, i);
+      if (text[i] === "]") return i + 1;
+      i = skipJsoncValue(text, i);
+      i = skipJsoncTrivia(text, i);
+      if (text[i] === ",") {
+        i++;
+        continue;
+      }
+      if (text[i] === "]") return i + 1;
+      throw new Error("expected ',' or ']' in a JSONC array");
+    }
+    throw new Error("unterminated JSONC array");
+  }
+  while (i < text.length && !/[\s,\]}]/.test(text[i])) i++;
+  return i;
+};
+
+const jsoncLineIndent = (text, index) => {
+  const lineStart = text.lastIndexOf("\n", index - 1) + 1;
+  return (text.slice(lineStart, index).match(/^[\t ]*/) || [""])[0];
+};
+
+const nextJsoncSignificant = (text, start, end) => {
+  const i = skipJsoncTrivia(text, start);
+  return i < end ? i : -1;
+};
+
+// Insert one property into a located JSONC object. Existing members and
+// comments stay byte-for-byte; only the separator and the new property are
+// added. An inline object stays inline and a multiline object stays
+// multiline.
+const insertJsoncProperty = (text, object, propertyText) => {
+  const last = object.members[object.members.length - 1];
+  const multiline = text.slice(object.open + 1, object.close).includes("\n");
+  const closeIndent = jsoncLineIndent(text, object.close);
+  const interior = text.slice(object.open + 1, object.close);
+
+  if (!last && !interior.trim()) {
+    if (!multiline) {
+      return `${text.slice(0, object.open + 1)} ${propertyText} ${text.slice(object.close)}`;
+    }
+    const insertAt = object.close - closeIndent.length;
+    return `${text.slice(0, insertAt)}${closeIndent}  ${propertyText}\n${text.slice(insertAt)}`;
+  }
+
+  if (!multiline) {
+    let insertAt = object.close;
+    let prefix = " ";
+    if (last) {
+      const comma = nextJsoncSignificant(text, last.valueEnd, object.close);
+      if (comma !== -1 && text[comma] === ",") {
+        insertAt = comma + 1;
+      } else {
+        insertAt = last.valueEnd;
+        prefix = ", ";
+      }
+    } else {
+      while (insertAt > object.open + 1 && /\s/.test(text[insertAt - 1])) insertAt--;
+    }
+    return `${text.slice(0, insertAt)}${prefix}${propertyText}${text.slice(insertAt)}`;
+  }
+
+  if (last) {
+    const comma = nextJsoncSignificant(text, last.valueEnd, object.close);
+    const insertAt = comma !== -1 && text[comma] === "," ? comma + 1 : last.valueEnd;
+    const prefix = comma !== -1 && text[comma] === "," ? "" : ",";
+    const memberIndent = jsoncLineIndent(text, last.keyStart);
+    const propertyIndent = memberIndent || `${closeIndent}  `;
+    return `${text.slice(0, insertAt)}${prefix}\n${propertyIndent}${propertyText}${text.slice(insertAt)}`;
+  }
+
+  const insertAt = object.close - closeIndent.length;
+  return `${text.slice(0, insertAt)}${closeIndent}  ${propertyText}\n${text.slice(insertAt)}`;
 };
 
 // --------------------------------------------------- jsonc surgical rewrite
@@ -610,6 +774,64 @@ const writeTextAtomic = (to, text) => {
     rmSync(stage, { recursive: true, force: true });
   }
 };
+// Add DCP's subagent opt-in to an existing dcp.jsonc without replacing the
+// rest of the file. The key is content-specific: a user may have DCP settings
+// and comments of their own, and a missing key must not cost them either. An
+// explicit value (including false) is the user's choice and is left alone.
+const ensureDcpAllowSubAgents = (file) => {
+  const raw = readTextSafe(file);
+  if (raw === null) return "not a regular file";
+  let parsed;
+  try {
+    parsed = parseJsonc(raw);
+  } catch {
+    return "not valid JSONC";
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return "not a JSONC object";
+  }
+
+  const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
+  if (hasOwn(parsed, "experimental")) {
+    const experimental = parsed.experimental;
+    if (!experimental || typeof experimental !== "object" || Array.isArray(experimental)) {
+      return "experimental is not an object";
+    }
+    if (hasOwn(experimental, "allowSubAgents")) {
+      return experimental.allowSubAgents === true ? "already allows subagents" : "keeps the explicit allowSubAgents value";
+    }
+  }
+
+  let next;
+  try {
+    const rootStart = skipJsoncTrivia(raw, 0);
+    const root = findJsoncObject(raw, rootStart);
+    if (!hasOwn(parsed, "experimental")) {
+      next = insertJsoncProperty(raw, root, "\"experimental\": { \"allowSubAgents\": true }");
+    } else {
+      const members = root.members.filter((member) => member.key === "experimental");
+      const member = members[members.length - 1];
+      if (!member || raw[member.valueStart] !== "{") return "experimental is not an object";
+      const experimental = findJsoncObject(raw, member.valueStart);
+      next = insertJsoncProperty(raw, experimental, "\"allowSubAgents\": true");
+    }
+  } catch {
+    return "not valid JSONC";
+  }
+
+  try {
+    const verified = parseJsonc(next);
+    if (verified?.experimental?.allowSubAgents !== true) {
+      return "could not add allowSubAgents safely";
+    }
+  } catch {
+    return "the upgraded config would not be valid JSONC";
+  }
+
+  if (!writeTextAtomic(file, next)) return "could not be written";
+  return "added experimental.allowSubAgents";
+};
+
 // Copy a file, and never let one bad destination abort the install.
 const copyOrKeep = (from, to) => {
   try {
@@ -711,14 +933,18 @@ cp(join(REPO, "AGENTS.md"), join(TARGET, "AGENTS.md"));
 // DCP reads its own config file, and its `experimental.allowSubAgents` default
 // is false: every compression path is refused in a subagent session with
 // "DCP compression is disabled in subagents". Agent lanes are subagent
-// sessions, so without this file /dcp-compress and the automatic nudges are
-// dead in exactly the sessions the orchestrator dispatch creates. Installed
-// only when missing - the file is user-tunable, so an existing dcp.jsonc is
-// never overwritten.
+// sessions, so without this setting /dcp-compress and the automatic nudges are
+// dead in exactly the sessions the orchestrator dispatch creates. A missing
+// file is copied from the template. An existing file keeps its settings and
+// comments: only a missing experimental.allowSubAgents key is added.
 const dcpConfigSrc = join(REPO, "config", "dcp.jsonc");
 const dcpConfigDest = join(TARGET, "dcp.jsonc");
 if (existsAny(dcpConfigDest)) {
-  log(`  keep ${dcpConfigDest} (already present)`);
+  if (DRY) {
+    log(`  check ${dcpConfigDest} (experimental.allowSubAgents)`);
+  } else {
+    log(`  update ${dcpConfigDest} (${ensureDcpAllowSubAgents(dcpConfigDest)})`);
+  }
 } else {
   log(`  copy ${dcpConfigSrc} -> ${dcpConfigDest}`);
   if (!DRY) copyOrKeep(dcpConfigSrc, dcpConfigDest);

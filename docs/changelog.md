@@ -13,6 +13,13 @@ commit date of the same version.
 
 ### Fixed
 
+- The installer now upgrades an existing `dcp.jsonc` in place when it lacks
+  `experimental.allowSubAgents`. The DCP plugin itself writes a stub file at
+  load, so the previous install-if-missing rule never delivered the gate
+  settings on an already-started host. A correct existing file is left
+  byte-for-byte untouched, and the config-home resolution now matches the
+  plugin's own (`XDG_CONFIG_HOME`, legacy `OPENCODE_CONFIG_HOME` as opt-in,
+  then `~/.config/opencode`).
 - Compression now works inside agent lanes. DCP refuses every compression path
   in a subagent session while `experimental.allowSubAgents` is `false`, and
   `false` is its default, so `/dcp-compress` answered `DCP compression is
