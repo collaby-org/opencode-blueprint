@@ -6,5 +6,7 @@ export declare function allocateBlockId(state: SessionState): number;
 export declare function allocateRunId(state: SessionState): number;
 export declare function attachCompressionDuration(messagesState: PruneMessagesState, messageId: string, callId: string, durationMs: number): number;
 export declare function wrapCompressedSummary(blockId: number, summary: string, format?: IdFormat): string;
+export declare function selectionTokenCost(selection: Pick<SelectionResolution, "messageTokenById" | "requiredBlockIds">, messagesState: PruneMessagesState): number;
+export declare function assertCompressionShrinksContext(summaryTokens: number, inputTokens: number, boundaryLabel: string, idFormat?: IdFormat): void;
 export declare function applyCompressionState(state: SessionState, input: CompressionStateInput, selection: SelectionResolution, anchorMessageId: string, blockId: number, summary: string, consumedBlockIds: number[]): AppliedCompressionResult;
 //# sourceMappingURL=state.d.ts.map

@@ -24,6 +24,8 @@ import {
     allocateBlockId,
     allocateRunId,
     applyCompressionState,
+    assertCompressionShrinksContext,
+    selectionTokenCost,
     wrapCompressedSummary,
 } from "./state"
 import type { CompressRangeToolArgs } from "./types"
@@ -166,6 +168,13 @@ export function createCompressRangeTool(ctx: ToolContext): ReturnType<typeof too
                         ctx.state.idFormat,
                     )
                     const summaryTokens = countTokens(storedSummary)
+
+                    assertCompressionShrinksContext(
+                        summaryTokens,
+                        selectionTokenCost(preparedPlan.selection, ctx.state.prune.messages),
+                        `${preparedPlan.entry.startId}..${preparedPlan.entry.endId}`,
+                        ctx.state.idFormat,
+                    )
 
                     const applied = applyCompressionState(
                         ctx.state,

@@ -4,6 +4,7 @@ import type { WithParts } from "../state";
 type History = Awaited<ReturnType<Plugin.Context["session"]["context"]>>;
 type Session = Awaited<ReturnType<Plugin.Context["session"]["get"]>>;
 export declare function history(entries: History, session: Session): WithParts[];
+export declare function relocateSystemRemindersToSystem(messages: WithParts[]): string[];
 export declare function project(native: Message[], entries: History, session: Session): {
     messages: WithParts[];
     restore: () => Message[];

@@ -72,6 +72,7 @@ export function createSessionState(idFormat: IdFormat = "xml"): SessionState {
         manualMode: false,
         compressPermission: undefined,
         pendingManualTrigger: null,
+        consumedManualTrigger: null,
         prune: {
             tools: new Map<string, number>(),
             messages: createPruneMessagesState(),
@@ -110,6 +111,7 @@ export function resetSessionState(state: SessionState): void {
     state.manualMode = false
     state.compressPermission = undefined
     state.pendingManualTrigger = null
+    state.consumedManualTrigger = null
     state.prune = {
         tools: new Map<string, number>(),
         messages: createPruneMessagesState(),

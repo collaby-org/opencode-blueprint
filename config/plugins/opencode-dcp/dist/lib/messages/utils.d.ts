@@ -7,6 +7,7 @@ export declare const createSyntheticTextPart: (baseMessage: WithParts, content: 
     messageID: string;
     type: "text";
     text: string;
+    synthetic: boolean;
 };
 type MessagePart = WithParts["parts"][number];
 type ToolPart = Extract<MessagePart, {

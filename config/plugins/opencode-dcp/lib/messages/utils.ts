@@ -196,16 +196,11 @@ export const stripHallucinationsFromString = (text: string, format: IdFormat = "
 export const stripHallucinations = (messages: WithParts[], format: IdFormat = "xml"): void => {
     for (const message of messages) {
         for (const part of message.parts) {
+            // Model-authored text only: a tool output that legitimately quotes DCP
+            // tags (a read of our own source, for instance) is not a hallucination
+            // and must survive untouched (#657).
             if (part.type === "text" && typeof part.text === "string") {
                 part.text = stripHallucinationsFromString(part.text, format)
-            }
-
-            if (
-                part.type === "tool" &&
-                part.state?.status === "completed" &&
-                typeof part.state.output === "string"
-            ) {
-                part.state.output = stripHallucinationsFromString(part.state.output, format)
             }
         }
     }
