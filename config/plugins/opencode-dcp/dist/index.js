@@ -3788,6 +3788,10 @@ function extractParameterKey(tool5, parameters) {
   }
   return paramStr.substring(0, 50);
 }
+var DCP_CHAT_MARKER = "\u25A3 DCP";
+function isDcpChatText(text) {
+  return !!text && text.startsWith(DCP_CHAT_MARKER);
+}
 function formatTokenCount(tokens, compact) {
   const suffix = compact ? "" : " tokens";
   if (tokens >= 1e3) {
@@ -4064,6 +4068,8 @@ async function sendIgnoredMessage(client, sessionID, text, params, logger) {
     providerID: params.providerId,
     modelID: params.modelId
   } : void 0;
+  const stamped = isDcpChatText(text) ? text : `${DCP_CHAT_MARKER}
+${text}`;
   try {
     await client.session.prompt({
       path: {
@@ -4077,8 +4083,11 @@ async function sendIgnoredMessage(client, sessionID, text, params, logger) {
         parts: [
           {
             type: "text",
-            text,
-            ignored: true
+            text: stamped,
+            ignored: true,
+            // Host TUIs hide synthetic text parts; `ignored` alone
+            // still renders them as visible user bubbles.
+            synthetic: true
           }
         ]
       }
@@ -4914,9 +4923,182 @@ var hasExplicitToolPermission = (permissionConfig, tool5) => {
   return permissionConfig ? Object.prototype.hasOwnProperty.call(permissionConfig, tool5) : false;
 };
 
+// lib/auth.ts
+function isSecureMode() {
+  return !!process.env.OPENCODE_SERVER_PASSWORD;
+}
+function getAuthorizationHeader() {
+  const password = process.env.OPENCODE_SERVER_PASSWORD;
+  if (!password) return void 0;
+  const username = process.env.OPENCODE_SERVER_USERNAME ?? "opencode";
+  const credentials = Buffer.from(`${username}:${password}`).toString("base64");
+  return `Basic ${credentials}`;
+}
+function configureClientAuth(client) {
+  const authHeader = getAuthorizationHeader();
+  if (!authHeader) {
+    return client;
+  }
+  const innerClient = client._client || client.client;
+  if (innerClient?.interceptors?.request) {
+    innerClient.interceptors.request.use((request) => {
+      if (!request.headers.has("Authorization")) {
+        request.headers.set("Authorization", authHeader);
+      }
+      return request;
+    });
+  }
+  return client;
+}
+
+// lib/update.ts
+import { readFile as readFile2, rm } from "fs/promises";
+import { basename, dirname as dirname2, join as join3 } from "path";
+import { fileURLToPath } from "url";
+var PACKAGE_NAME = "@tarquinen/opencode-dcp";
+function startAutoUpdate(ctx, enabled) {
+  if (!enabled) return;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 1e4);
+  void checkAutoUpdate(controller.signal).then((result) => {
+    if (!result.updated) return;
+    setTimeout(() => {
+      ctx.client.tui.showToast({
+        body: {
+          title: "DCP update ready",
+          message: `Updated ${result.name} from ${result.current} to ${result.latest}. Restart OpenCode to finish.`,
+          variant: "info",
+          duration: 7e3
+        }
+      });
+    }, 5e3);
+  }).catch(() => {
+  }).finally(() => clearTimeout(timeout));
+}
+async function checkAutoUpdate(signal) {
+  const packageDir = await findPackageDir(PACKAGE_NAME);
+  if (!packageDir) return { updated: false };
+  const pkg = await readPackageJson(join3(packageDir, "package.json"));
+  if (!pkg?.name || !pkg.version) return { updated: false };
+  const latest = await fetchLatestVersion(pkg.name, signal);
+  if (!latest || !isVersionNewer(latest, pkg.version)) return { updated: false };
+  const removeDir = await updateRemoveDir(packageDir, pkg.name);
+  if (!removeDir) return { updated: false };
+  try {
+    await rm(removeDir, { recursive: true, force: true });
+  } catch {
+    return {
+      updated: false,
+      error: "remove_failed",
+      name: pkg.name,
+      current: pkg.version,
+      latest
+    };
+  }
+  return { updated: true, name: pkg.name, current: pkg.version, latest };
+}
+async function findPackageDir(name) {
+  let dir = dirname2(fileURLToPath(import.meta.url));
+  for (; ; ) {
+    const pkg = await readPackageJson(join3(dir, "package.json"));
+    if (pkg?.name === name) return dir;
+    const parent = dirname2(dir);
+    if (parent === dir) return void 0;
+    dir = parent;
+  }
+}
+async function updateRemoveDir(packageDir, name) {
+  const packageParent = dirname2(packageDir);
+  const nodeModulesDir = basename(packageParent).startsWith("@") ? dirname2(packageParent) : packageParent;
+  if (basename(nodeModulesDir) !== "node_modules") return void 0;
+  const wrapperDir = dirname2(nodeModulesDir);
+  const wrapperPkg = await readPackageJson(join3(wrapperDir, "package.json"));
+  const spec = wrapperSpec(wrapperDir, name) ?? wrapperPkg?.dependencies?.[name];
+  if (!spec || !isAutoUpdatableSpec(spec)) return void 0;
+  return wrapperDir;
+}
+function wrapperSpec(wrapperDir, name) {
+  if (name.startsWith("@")) {
+    const [scope, pkg] = name.split("/");
+    if (!scope || !pkg || basename(dirname2(wrapperDir)) !== scope) return void 0;
+    const prefix2 = `${pkg}@`;
+    const base2 = basename(wrapperDir);
+    return base2.startsWith(prefix2) ? base2.slice(prefix2.length) : void 0;
+  }
+  const prefix = `${name}@`;
+  const base = basename(wrapperDir);
+  return base.startsWith(prefix) ? base.slice(prefix.length) : void 0;
+}
+function isAutoUpdatableSpec(spec) {
+  const value = spec.trim();
+  if (!value) return false;
+  if (value === "latest" || value === "*") return true;
+  if (/^[~^]/.test(value)) return true;
+  if (/^(?:>=|>|<=|<)/.test(value)) return true;
+  if (/\s+(?:\|\||-|[<>=])\s+/.test(value)) return true;
+  return false;
+}
+async function readPackageJson(path) {
+  try {
+    const data = JSON.parse(await readFile2(path, "utf-8"));
+    return data && typeof data === "object" ? data : void 0;
+  } catch {
+    return void 0;
+  }
+}
+async function fetchLatestVersion(name, signal) {
+  try {
+    const response = await fetch(
+      `https://registry.npmjs.org/${encodeURIComponent(name)}/latest`,
+      {
+        signal
+      }
+    );
+    if (!response.ok) return void 0;
+    const data = await response.json();
+    if (!data || typeof data !== "object") return void 0;
+    const version = data.version;
+    return typeof version === "string" ? version : void 0;
+  } catch {
+    return void 0;
+  }
+}
+function isVersionNewer(latest, current) {
+  const next = parseVersion(latest);
+  const prev = parseVersion(current);
+  if (!next || !prev) return false;
+  for (let i = 0; i < 3; i++) {
+    if (next.parts[i] !== prev.parts[i]) return next.parts[i] > prev.parts[i];
+  }
+  if (!next.pre.length && prev.pre.length) return true;
+  if (next.pre.length && !prev.pre.length) return false;
+  for (let i = 0; i < Math.max(next.pre.length, prev.pre.length); i++) {
+    const a = next.pre[i];
+    const b = prev.pre[i];
+    if (a === void 0) return false;
+    if (b === void 0) return true;
+    if (a === b) continue;
+    const aNumber = /^\d+$/.test(a) ? Number(a) : void 0;
+    const bNumber = /^\d+$/.test(b) ? Number(b) : void 0;
+    if (aNumber !== void 0 && bNumber !== void 0) return aNumber > bNumber;
+    if (aNumber !== void 0) return false;
+    if (bNumber !== void 0) return true;
+    return a > b;
+  }
+  return false;
+}
+function parseVersion(version) {
+  const match = version.match(/^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+.+)?$/);
+  if (!match) return void 0;
+  return {
+    parts: [Number(match[1]), Number(match[2]), Number(match[3])],
+    pre: match[4]?.split(".") ?? []
+  };
+}
+
 // lib/logger.ts
 import { writeFile as writeFile2, mkdir as mkdir2 } from "fs/promises";
-import { join as join3 } from "path";
+import { join as join4 } from "path";
 import { existsSync as existsSync3 } from "fs";
 import { homedir as homedir3 } from "os";
 var Logger = class {
@@ -4924,8 +5106,8 @@ var Logger = class {
   enabled;
   constructor(enabled) {
     this.enabled = enabled;
-    const configHome = process.env.XDG_CONFIG_HOME || join3(homedir3(), ".config");
-    this.logDir = join3(configHome, "opencode", "logs", "dcp");
+    const configHome = process.env.XDG_CONFIG_HOME || join4(homedir3(), ".config");
+    this.logDir = join4(configHome, "opencode", "logs", "dcp");
   }
   async ensureLogDir() {
     if (!existsSync3(this.logDir)) {
@@ -4980,11 +5162,11 @@ var Logger = class {
       const dataStr = this.formatData(data);
       const logLine = `${timestamp} ${level.padEnd(5)} ${component}: ${message}${dataStr ? " | " + dataStr : ""}
 `;
-      const dailyLogDir = join3(this.logDir, "daily");
+      const dailyLogDir = join4(this.logDir, "daily");
       if (!existsSync3(dailyLogDir)) {
         await mkdir2(dailyLogDir, { recursive: true });
       }
-      const logFile = join3(dailyLogDir, `${(/* @__PURE__ */ new Date()).toISOString().split("T")[0]}.log`);
+      const logFile = join4(dailyLogDir, `${(/* @__PURE__ */ new Date()).toISOString().split("T")[0]}.log`);
       await writeFile2(logFile, logLine, { flag: "a" });
     } catch (error) {
     }
@@ -5093,7 +5275,7 @@ var Logger = class {
   async saveContext(sessionId, messages) {
     if (!this.enabled) return;
     try {
-      const contextDir = join3(this.logDir, "context", sessionId);
+      const contextDir = join4(this.logDir, "context", sessionId);
       if (!existsSync3(contextDir)) {
         await mkdir2(contextDir, { recursive: true });
       }
@@ -5101,7 +5283,7 @@ var Logger = class {
         (msg) => msg.parts && msg.parts.length > 0
       );
       const timestamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-");
-      const contextFile = join3(contextDir, `${timestamp}.json`);
+      const contextFile = join4(contextDir, `${timestamp}.json`);
       await writeFile2(contextFile, JSON.stringify(minimized, null, 2));
     } catch (error) {
     }
@@ -5110,7 +5292,7 @@ var Logger = class {
 
 // lib/prompts/store.ts
 import { existsSync as existsSync4, mkdirSync as mkdirSync2, readFileSync as readFileSync2, writeFileSync as writeFileSync2, statSync as statSync2 } from "fs";
-import { join as join4, dirname as dirname2 } from "path";
+import { join as join5, dirname as dirname3 } from "path";
 import { homedir as homedir4 } from "os";
 
 // lib/prompts/system.ts
@@ -5440,7 +5622,7 @@ function createBundledRuntimePrompts(bundled) {
 function findOpencodeDir2(startDir) {
   let current = startDir;
   while (current !== "/") {
-    const candidate = join4(current, ".opencode");
+    const candidate = join5(current, ".opencode");
     if (existsSync4(candidate)) {
       try {
         if (statSync2(candidate).isDirectory()) {
@@ -5449,7 +5631,7 @@ function findOpencodeDir2(startDir) {
       } catch {
       }
     }
-    const parent = dirname2(current);
+    const parent = dirname3(current);
     if (parent === current) {
       break;
     }
@@ -5458,13 +5640,13 @@ function findOpencodeDir2(startDir) {
   return null;
 }
 function resolvePromptPaths(workingDirectory) {
-  const configHome = process.env.XDG_CONFIG_HOME || join4(homedir4(), ".config");
-  const globalRoot = join4(configHome, "opencode", "dcp-prompts");
-  const defaultsDir = join4(globalRoot, "defaults");
-  const globalOverridesDir = join4(globalRoot, "overrides");
-  const configDirOverridesDir = process.env.OPENCODE_CONFIG_DIR ? join4(process.env.OPENCODE_CONFIG_DIR, "dcp-prompts", "overrides") : null;
+  const configHome = process.env.XDG_CONFIG_HOME || join5(homedir4(), ".config");
+  const globalRoot = join5(configHome, "opencode", "dcp-prompts");
+  const defaultsDir = join5(globalRoot, "defaults");
+  const globalOverridesDir = join5(globalRoot, "overrides");
+  const configDirOverridesDir = process.env.OPENCODE_CONFIG_DIR ? join5(process.env.OPENCODE_CONFIG_DIR, "dcp-prompts", "overrides") : null;
   const opencodeDir = findOpencodeDir2(workingDirectory);
-  const projectOverridesDir = opencodeDir ? join4(opencodeDir, "dcp-prompts", "overrides") : null;
+  const projectOverridesDir = opencodeDir ? join5(opencodeDir, "dcp-prompts", "overrides") : null;
   return {
     defaultsDir,
     globalOverridesDir,
@@ -5638,16 +5820,16 @@ var PromptStore = class {
     const candidates = [];
     if (this.paths.projectOverridesDir) {
       candidates.push({
-        path: join4(this.paths.projectOverridesDir, fileName)
+        path: join5(this.paths.projectOverridesDir, fileName)
       });
     }
     if (this.paths.configDirOverridesDir) {
       candidates.push({
-        path: join4(this.paths.configDirOverridesDir, fileName)
+        path: join5(this.paths.configDirOverridesDir, fileName)
       });
     }
     candidates.push({
-      path: join4(this.paths.globalOverridesDir, fileName)
+      path: join5(this.paths.globalOverridesDir, fileName)
     });
     return candidates;
   }
@@ -5670,7 +5852,7 @@ var PromptStore = class {
       const managedContent = buildDefaultPromptFileContent(
         bundledEditable || this.bundled[definition.runtimeField]
       );
-      const filePath = join4(this.paths.defaultsDir, definition.fileName);
+      const filePath = join5(this.paths.defaultsDir, definition.fileName);
       try {
         const existing = readFileIfExists(filePath);
         if (existing === managedContent) {
@@ -5684,7 +5866,7 @@ var PromptStore = class {
         });
       }
     }
-    const readmePath = join4(this.paths.defaultsDir, DEFAULTS_README_FILE);
+    const readmePath = join5(this.paths.defaultsDir, DEFAULTS_README_FILE);
     const readmeContent = buildDefaultsReadmeContent();
     try {
       const existing = readFileIfExists(readmePath);
@@ -5844,9 +6026,6 @@ var stripHallucinations = (messages, format2 = "xml") => {
     for (const part of message.parts) {
       if (part.type === "text" && typeof part.text === "string") {
         part.text = stripHallucinationsFromString(part.text, format2);
-      }
-      if (part.type === "tool" && part.state?.status === "completed" && typeof part.state.output === "string") {
-        part.state.output = stripHallucinationsFromString(part.state.output, format2);
       }
     }
   }
@@ -8033,179 +8212,6 @@ function createEventHandler(state, logger) {
   };
 }
 
-// lib/auth.ts
-function isSecureMode() {
-  return !!process.env.OPENCODE_SERVER_PASSWORD;
-}
-function getAuthorizationHeader() {
-  const password = process.env.OPENCODE_SERVER_PASSWORD;
-  if (!password) return void 0;
-  const username = process.env.OPENCODE_SERVER_USERNAME ?? "opencode";
-  const credentials = Buffer.from(`${username}:${password}`).toString("base64");
-  return `Basic ${credentials}`;
-}
-function configureClientAuth(client) {
-  const authHeader = getAuthorizationHeader();
-  if (!authHeader) {
-    return client;
-  }
-  const innerClient = client._client || client.client;
-  if (innerClient?.interceptors?.request) {
-    innerClient.interceptors.request.use((request) => {
-      if (!request.headers.has("Authorization")) {
-        request.headers.set("Authorization", authHeader);
-      }
-      return request;
-    });
-  }
-  return client;
-}
-
-// lib/update.ts
-import { readFile as readFile2, rm } from "fs/promises";
-import { basename, dirname as dirname3, join as join5 } from "path";
-import { fileURLToPath } from "url";
-var PACKAGE_NAME = "@tarquinen/opencode-dcp";
-function startAutoUpdate(ctx, enabled) {
-  if (!enabled) return;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 1e4);
-  void checkAutoUpdate(controller.signal).then((result) => {
-    if (!result.updated) return;
-    setTimeout(() => {
-      ctx.client.tui.showToast({
-        body: {
-          title: "DCP update ready",
-          message: `Updated ${result.name} from ${result.current} to ${result.latest}. Restart OpenCode to finish.`,
-          variant: "info",
-          duration: 7e3
-        }
-      });
-    }, 5e3);
-  }).catch(() => {
-  }).finally(() => clearTimeout(timeout));
-}
-async function checkAutoUpdate(signal) {
-  const packageDir = await findPackageDir(PACKAGE_NAME);
-  if (!packageDir) return { updated: false };
-  const pkg = await readPackageJson(join5(packageDir, "package.json"));
-  if (!pkg?.name || !pkg.version) return { updated: false };
-  const latest = await fetchLatestVersion(pkg.name, signal);
-  if (!latest || !isVersionNewer(latest, pkg.version)) return { updated: false };
-  const removeDir = await updateRemoveDir(packageDir, pkg.name);
-  if (!removeDir) return { updated: false };
-  try {
-    await rm(removeDir, { recursive: true, force: true });
-  } catch {
-    return {
-      updated: false,
-      error: "remove_failed",
-      name: pkg.name,
-      current: pkg.version,
-      latest
-    };
-  }
-  return { updated: true, name: pkg.name, current: pkg.version, latest };
-}
-async function findPackageDir(name) {
-  let dir = dirname3(fileURLToPath(import.meta.url));
-  for (; ; ) {
-    const pkg = await readPackageJson(join5(dir, "package.json"));
-    if (pkg?.name === name) return dir;
-    const parent = dirname3(dir);
-    if (parent === dir) return void 0;
-    dir = parent;
-  }
-}
-async function updateRemoveDir(packageDir, name) {
-  const packageParent = dirname3(packageDir);
-  const nodeModulesDir = basename(packageParent).startsWith("@") ? dirname3(packageParent) : packageParent;
-  if (basename(nodeModulesDir) !== "node_modules") return void 0;
-  const wrapperDir = dirname3(nodeModulesDir);
-  const wrapperPkg = await readPackageJson(join5(wrapperDir, "package.json"));
-  const spec = wrapperSpec(wrapperDir, name) ?? wrapperPkg?.dependencies?.[name];
-  if (!spec || !isAutoUpdatableSpec(spec)) return void 0;
-  return wrapperDir;
-}
-function wrapperSpec(wrapperDir, name) {
-  if (name.startsWith("@")) {
-    const [scope, pkg] = name.split("/");
-    if (!scope || !pkg || basename(dirname3(wrapperDir)) !== scope) return void 0;
-    const prefix2 = `${pkg}@`;
-    const base2 = basename(wrapperDir);
-    return base2.startsWith(prefix2) ? base2.slice(prefix2.length) : void 0;
-  }
-  const prefix = `${name}@`;
-  const base = basename(wrapperDir);
-  return base.startsWith(prefix) ? base.slice(prefix.length) : void 0;
-}
-function isAutoUpdatableSpec(spec) {
-  const value = spec.trim();
-  if (!value) return false;
-  if (value === "latest" || value === "*") return true;
-  if (/^[~^]/.test(value)) return true;
-  if (/^(?:>=|>|<=|<)/.test(value)) return true;
-  if (/\s+(?:\|\||-|[<>=])\s+/.test(value)) return true;
-  return false;
-}
-async function readPackageJson(path) {
-  try {
-    const data = JSON.parse(await readFile2(path, "utf-8"));
-    return data && typeof data === "object" ? data : void 0;
-  } catch {
-    return void 0;
-  }
-}
-async function fetchLatestVersion(name, signal) {
-  try {
-    const response = await fetch(
-      `https://registry.npmjs.org/${encodeURIComponent(name)}/latest`,
-      {
-        signal
-      }
-    );
-    if (!response.ok) return void 0;
-    const data = await response.json();
-    if (!data || typeof data !== "object") return void 0;
-    const version = data.version;
-    return typeof version === "string" ? version : void 0;
-  } catch {
-    return void 0;
-  }
-}
-function isVersionNewer(latest, current) {
-  const next = parseVersion(latest);
-  const prev = parseVersion(current);
-  if (!next || !prev) return false;
-  for (let i = 0; i < 3; i++) {
-    if (next.parts[i] !== prev.parts[i]) return next.parts[i] > prev.parts[i];
-  }
-  if (!next.pre.length && prev.pre.length) return true;
-  if (next.pre.length && !prev.pre.length) return false;
-  for (let i = 0; i < Math.max(next.pre.length, prev.pre.length); i++) {
-    const a = next.pre[i];
-    const b = prev.pre[i];
-    if (a === void 0) return false;
-    if (b === void 0) return true;
-    if (a === b) continue;
-    const aNumber = /^\d+$/.test(a) ? Number(a) : void 0;
-    const bNumber = /^\d+$/.test(b) ? Number(b) : void 0;
-    if (aNumber !== void 0 && bNumber !== void 0) return aNumber > bNumber;
-    if (aNumber !== void 0) return false;
-    if (bNumber !== void 0) return true;
-    return a > b;
-  }
-  return false;
-}
-function parseVersion(version) {
-  const match = version.match(/^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+.+)?$/);
-  if (!match) return void 0;
-  return {
-    parts: [Number(match[1]), Number(match[2]), Number(match[3])],
-    pre: match[4]?.split(".") ?? []
-  };
-}
-
 // lib/v2/index.ts
 import { tool as tool4 } from "@opencode-ai/plugin";
 
@@ -8255,13 +8261,15 @@ function history(entries, session2) {
       ];
     }
     let text;
-    if (entry.type === "user")
+    if (entry.type === "user") {
+      if (isDcpChatText(entry.text)) return [];
       text = [
         ...(entry.skills ?? []).flatMap(
           (skill) => skill.text === void 0 ? [] : [skill.text]
         ),
         entry.text
       ].join("\n\n");
+    }
     if (entry.type === "synthetic" || entry.type === "skill") text = entry.text;
     if (entry.type === "location-switched")
       text = `The working directory has been changed to ${entry.location.directory}.`;
@@ -8348,8 +8356,16 @@ function project(native, entries, session2) {
       parts.push({ ...base, id: `${message.id}:step`, type: "step-start" });
     for (const [index, part] of message.content.entries()) {
       let projected2;
-      if (part.type === "text")
-        projected2 = { ...base, id: `${message.id}:${index}`, type: "text", text: part.text };
+      if (part.type === "text") {
+        const dropped = message.role === "user" && (isDcpChatText(part.text) || part.ignored === true);
+        projected2 = {
+          ...base,
+          id: `${message.id}:${index}`,
+          type: "text",
+          text: part.text,
+          ...dropped ? { ignored: true } : {}
+        };
+      }
       if (part.type === "media") {
         const { source, mediaType } = part.media;
         projected2 = {
@@ -8426,9 +8442,10 @@ function project(native, entries, session2) {
         if (part.type === "tool-result" && originals.has(owners.get(part)) && !retained.has(owners.get(part)))
           continue;
         const edit = links.get(part);
-        if (part.type === "text" && edit?.type === "text")
+        if (part.type === "text" && edit?.type === "text") {
+          if (edit.ignored) continue;
           content.push({ ...part, text: edit.text });
-        else if (part.type === "tool-call" && edit?.type === "tool")
+        } else if (part.type === "tool-call" && edit?.type === "tool")
           content.push({ ...part, input: edit.state.input });
         else if (part.type === "tool-result" && edit?.type === "tool" && edit.state.status === "completed" && typeof edit.state.output === "string" && edit.state.output !== part.result.value) {
           content.push({ ...part, result: { type: "text", value: edit.state.output } });
@@ -8489,12 +8506,33 @@ var rpc = {
     },
     manual: { input: session.extend({ enabled: z.boolean() }), output: z.object({}) }
   },
-  events: {}
+  // Server -> TUI notifications (prune/compress reports, command output).
+  // Ephemeral by design: nothing is stored, nothing enters model context.
+  events: {
+    notify: {
+      schema: z.object({
+        title: z.string(),
+        message: z.string(),
+        variant: z.enum(["info", "success", "warning", "error"]).optional(),
+        duration: z.number().optional()
+      })
+    }
+  }
 };
 
 // lib/v2/index.ts
+var emitNotify;
+var REPORT_TOAST_MAX_CHARS = 2e3;
 async function report(logger, text, sessionID) {
-  logger.debug("V2 report (display pending)", { sessionID, text });
+  logger.debug("V2 report", { sessionID, text });
+  if (!emitNotify || !text) return;
+  const message = text.length > REPORT_TOAST_MAX_CHARS ? `${text.slice(0, REPORT_TOAST_MAX_CHARS)}
+... (truncated, ${text.length} chars total)` : text;
+  try {
+    await emitNotify({ title: "DCP", message });
+  } catch (cause) {
+    logger.debug("V2 report emit failed", { error: String(cause) });
+  }
 }
 async function setup(ctx) {
   const warnings = {
@@ -8616,10 +8654,11 @@ async function setup(ctx) {
           event.agent
         );
         if (state.isSubAgent && !config.experimental.allowSubAgents) {
-          delete event.tools.compress;
+          if (event.tools?.compress) delete event.tools.compress;
           return;
         }
-        if (state.compressPermission === "deny") delete event.tools.compress;
+        if (event.tools?.compress && state.compressPermission === "deny")
+          delete event.tools.compress;
         state.modelContextLimit = limits.get(`${event.model.providerID}/${event.model.id}`);
         state.systemPromptTokens = countTokens(
           event.system.map((part) => part.text).join("\n")
@@ -8785,6 +8824,8 @@ async function setup(ctx) {
       await saveSessionState(state, logger);
       return {};
     })
+  }).then((registration) => {
+    emitNotify = (event) => registration.events.emit("notify", event);
   });
   logger.info("DCP V2 initialized");
   return () => {
@@ -8889,7 +8930,12 @@ var server = (async (ctx) => {
     }
   };
 });
-var index_default = { id: "opencode-dcp", setup, server };
+var plugin = {
+  id: "opencode-dcp",
+  setup,
+  server
+};
+var index_default = plugin;
 export {
   index_default as default
 };
