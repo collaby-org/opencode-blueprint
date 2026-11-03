@@ -84,6 +84,7 @@ export async function resetCompressPending(
 ): Promise<void> {
     if (ctx.state.manualMode === "compress-pending") {
         ctx.state.manualMode = false
+        ctx.state.consumedManualTrigger = null
         await refreshManualMode(
             ctx.state,
             toolCtx.sessionID,

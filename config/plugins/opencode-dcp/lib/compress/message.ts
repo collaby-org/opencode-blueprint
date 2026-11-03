@@ -16,6 +16,8 @@ import {
     allocateBlockId,
     allocateRunId,
     applyCompressionState,
+    assertCompressionShrinksContext,
+    selectionTokenCost,
     wrapCompressedSummary,
 } from "./state"
 
@@ -121,6 +123,13 @@ export function createCompressMessageTool(ctx: ToolContext): ReturnType<typeof t
                         ctx.state.idFormat,
                     )
                     const summaryTokens = countTokens(storedSummary)
+
+                    assertCompressionShrinksContext(
+                        summaryTokens,
+                        selectionTokenCost(plan.selection, ctx.state.prune.messages),
+                        plan.entry.messageId,
+                        ctx.state.idFormat,
+                    )
 
                     applyCompressionState(
                         ctx.state,
