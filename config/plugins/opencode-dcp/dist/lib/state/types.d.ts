@@ -68,6 +68,8 @@ export interface Prune {
 export interface PendingManualTrigger {
     sessionId: string;
     prompt: string;
+    /** What manual mode was before the trigger flipped it to compress-pending. */
+    restoreTo: false | "active";
 }
 export interface MessageIdState {
     byRawId: Map<string, string>;
@@ -79,6 +81,12 @@ export interface Nudges {
     turnNudgeAnchors: Set<string>;
     iterationNudgeAnchors: Set<string>;
 }
+export interface ConsumedManualTrigger {
+    /** The user message the trigger prompt was written into. */
+    messageId: string;
+    /** What manual mode was before the trigger flipped it to compress-pending. */
+    restoreTo: false | "active";
+}
 export interface SessionState {
     idFormat: IdFormat;
     sessionId: string | null;
@@ -86,6 +94,13 @@ export interface SessionState {
     manualMode: false | "active" | "compress-pending";
     compressPermission: "ask" | "allow" | "deny" | undefined;
     pendingManualTrigger: PendingManualTrigger | null;
+    /**
+     * Set when a trigger prompt reached the model but the compress call has not
+     * happened yet. Without it a model that never calls compress leaves the
+     * session pinned in compress-pending forever, which permanently suppresses
+     * the automatic nudges.
+     */
+    consumedManualTrigger: ConsumedManualTrigger | null;
     prune: Prune;
     nudges: Nudges;
     stats: SessionStats;

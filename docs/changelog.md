@@ -9,6 +9,33 @@ Version 1.0.0 was published to npm but never got a git tag, so it has no tag
 range. The npm publish timestamps are UTC and can sit a day earlier than the
 commit date of the same version.
 
+## [1.4.8] - 2026-11-03
+
+### Fixed
+
+- A manual `/dcp-compress` trigger that produced no compression no longer
+  latches the session. The trigger is now released and `manualMode` restored
+  once the next fresh turn arrives (upstream `Tarquinen/opencode-dynamic-context-pruning#645`,
+  unmerged). This is why `/dcp-compress` "stopped working" permanently after
+  one malformed compress call on NVIDIA: the model truncated tool-call
+  arguments mid-JSON, the call never executed, and the pending manual trigger
+  suppressed automatic nudges for the rest of the session.
+- Added the #645 self-healing state (`restoreTo`, `ConsumedManualTrigger`) plus
+  upstream port of non-shrinking compression refusals (#643): a compression
+  whose summary plus required blocks does not shrink the token count now throws
+  a guiding error instead of growing the context, with a 2000-token floor for
+  tiny selections.
+- Prompts now mark compression summaries as temporal history, not live
+  instructions, so the model stops replaying old approvals as current intent
+  (upstream #646, resolves upstream issue #560).
+- Guarded the `event.tools.compress` deletion (#668): another plugin clearing
+  `event.tools` on opencode 2.2.5 aborts compaction with a `TypeError`.
+- `stripHallucinations` no longer strips DCP-style tags from tool outputs
+  (#657): reading a file (including this plugin's own prompts) that quotes a
+  reminder block was silently truncated.
+- Echoed `@id@` tag debris the model copies into replies is cleaned by the
+  upstream #634 echo-removal rules (#632, #562, #642).
+
 ## [1.4.7] - 2026-11-01
 
 ### Fixed
