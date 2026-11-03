@@ -14,4 +14,4 @@ export declare function dispatchDcpServerCommand(input: {
     readonly open: () => Promise<void> | void;
     readonly fail: (cause: unknown) => void;
 }): Promise<void>;
-export {};
+//# sourceMappingURL=slash-command.d.ts.map
