@@ -315,6 +315,10 @@ export async function setup(ctx: Plugin.Context) {
                             Date.now() - started,
                         )
                         await saveSessionState(state, logger)
+                        // Surface the completed compression through the
+                        // notify transport (toast on hosts whose TUI reads
+                        // the queue; the text is a ~120-char one-liner).
+                        await report(logger, content as string, context.sessionID)
                         // Both shared compression executors return text; the V1 helper's
                         // public return type also permits unrelated attachment results.
                         return { content: content as string }
