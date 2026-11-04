@@ -1708,9 +1708,20 @@ function getCurrentTokenUsage(state, messages) {
     const reasoning = assistantInfo.tokens?.reasoning || 0;
     const cacheRead = assistantInfo.tokens?.cache?.read || 0;
     const cacheWrite = assistantInfo.tokens?.cache?.write || 0;
-    return input + output2 + reasoning + cacheRead + cacheWrite;
+    const reportedUsage = input + output2 + reasoning + cacheRead + cacheWrite;
+    return Math.max(reportedUsage, estimateCurrentMessageTokenUsage(state, messages));
   }
   return 0;
+}
+function estimateCurrentMessageTokenUsage(state, messages) {
+  let total = 0;
+  for (const msg of messages) {
+    if (state.lastCompaction > 0 && (msg.info.time.created < state.lastCompaction || msg.info.summary === true && msg.info.time.created === state.lastCompaction)) {
+      continue;
+    }
+    total += countAllMessageTokens(msg);
+  }
+  return total;
 }
 function getCurrentParams(state, messages, logger) {
   const userMsg = getLastUserMessage(messages);
@@ -2939,6 +2950,13 @@ function resetOnCompaction(state) {
     turnNudgeAnchors: /* @__PURE__ */ new Set(),
     iterationNudgeAnchors: /* @__PURE__ */ new Set()
   };
+  state.stats = {
+    pruneTokenCounter: 0,
+    totalPruneTokens: 0
+  };
+  state.systemPromptTokens = void 0;
+  state.compressionTiming.startsByCallId.clear();
+  state.compressionTiming.pendingByCallId.clear();
 }
 
 // lib/state/persistence.ts
@@ -2974,7 +2992,10 @@ async function saveSessionState(sessionState, logger, sessionName) {
     }
     const state = {
       sessionName,
-      manualMode: !!sessionState.manualMode,
+      // Persist the full tri-state: coercing to a boolean here leaked an
+      // in-flight `/dcp-compress` trigger as "manual mode ON" and it was
+      // re-armed by refreshManualMode on the next turn.
+      manualMode: sessionState.manualMode,
       prune: {
         tools: Object.fromEntries(sessionState.prune.tools),
         messages: serializePruneMessagesState(sessionState.prune.messages)
@@ -3063,6 +3084,10 @@ async function loadSessionState(sessionId, logger) {
     return null;
   }
 }
+async function deleteSessionState(sessionId) {
+  const filePath = getSessionFilePath(sessionId);
+  await fs.unlink(filePath);
+}
 function emptyPersistedState(manualMode) {
   return {
     manualMode,
@@ -3091,7 +3116,17 @@ function emptyPersistedState(manualMode) {
 }
 async function loadManualModeSetting(sessionId, logger) {
   const state = await loadSessionState(sessionId, logger);
-  return typeof state?.manualMode === "boolean" ? state.manualMode : void 0;
+  const manualMode = state?.manualMode;
+  if (manualMode === "compress-pending") {
+    return void 0;
+  }
+  if (manualMode === "active") {
+    return true;
+  }
+  if (typeof manualMode === "boolean") {
+    return manualMode;
+  }
+  return false;
 }
 async function saveManualModeSetting(sessionId, manualMode, logger) {
   const existing = await loadSessionState(sessionId, logger);
@@ -3299,8 +3334,8 @@ async function ensureSessionInitialized(client, state, sessionId, logger, messag
   if (persisted === null) {
     return;
   }
-  if (typeof persisted.manualMode === "boolean") {
-    state.manualMode = persisted.manualMode ? "active" : false;
+  if (persisted.manualMode === true || persisted.manualMode === "active" || persisted.manualMode === false) {
+    state.manualMode = persisted.manualMode === "active" || persisted.manualMode === true ? "active" : false;
   }
   state.prune.tools = loadPruneMap(persisted.prune.tools);
   state.prune.messages = loadPruneMessagesState(persisted.prune.messages);
@@ -3788,6 +3823,10 @@ function extractParameterKey(tool5, parameters) {
   }
   return paramStr.substring(0, 50);
 }
+var DCP_CHAT_MARKER = "\u25A3 DCP";
+function isDcpChatText(text) {
+  return !!text && text.startsWith(DCP_CHAT_MARKER);
+}
 function formatTokenCount(tokens, compact) {
   const suffix = compact ? "" : " tokens";
   if (tokens >= 1e3) {
@@ -4064,6 +4103,8 @@ async function sendIgnoredMessage(client, sessionID, text, params, logger) {
     providerID: params.providerId,
     modelID: params.modelId
   } : void 0;
+  const stamped = isDcpChatText(text) ? text : `${DCP_CHAT_MARKER}
+${text}`;
   try {
     await client.session.prompt({
       path: {
@@ -4077,8 +4118,11 @@ async function sendIgnoredMessage(client, sessionID, text, params, logger) {
         parts: [
           {
             type: "text",
-            text,
-            ignored: true
+            text: stamped,
+            ignored: true,
+            // Host TUIs hide synthetic text parts; `ignored` alone
+            // still renders them as visible user bubbles.
+            synthetic: true
           }
         ]
       }
@@ -5845,9 +5889,6 @@ var stripHallucinations = (messages, format2 = "xml") => {
       if (part.type === "text" && typeof part.text === "string") {
         part.text = stripHallucinationsFromString(part.text, format2);
       }
-      if (part.type === "tool" && part.state?.status === "completed" && typeof part.state.output === "string") {
-        part.state.output = stripHallucinationsFromString(part.state.output, format2);
-      }
     }
   }
 };
@@ -6198,6 +6239,7 @@ function listPriorityRefsBeforeIndex(messages, priorities, anchorIndex, priority
 
 // lib/messages/inject/utils.ts
 var MESSAGE_MODE_NUDGE_PRIORITY = "high";
+var PROVIDER_HEADROOM_TOKENS = 2e4;
 function getNudgeFrequency(config) {
   return Math.max(1, Math.floor(config.compress.nudgeFrequency || 1));
 }
@@ -6278,7 +6320,14 @@ function isContextOverLimits(config, state, providerId, modelId, messages) {
     modelId,
     "max"
   );
-  const maxContextLimit = resolvedMaxContextLimit === void 0 ? void 0 : resolvedMaxContextLimit + summaryTokenExtension;
+  const effectiveMaxContextLimit = resolvedMaxContextLimit === void 0 || state.modelContextLimit === void 0 ? resolvedMaxContextLimit : Math.max(
+    0,
+    Math.min(
+      resolvedMaxContextLimit,
+      state.modelContextLimit - PROVIDER_HEADROOM_TOKENS
+    )
+  );
+  const maxContextLimit = effectiveMaxContextLimit === void 0 ? void 0 : effectiveMaxContextLimit + summaryTokenExtension;
   const minContextLimit = resolveContextTokenLimit(config, state, providerId, modelId, "min");
   const currentTokens = getCurrentTokenUsage(state, messages);
   const overMaxLimit = maxContextLimit === void 0 ? false : currentTokens > maxContextLimit;
@@ -6442,7 +6491,15 @@ var injectCompressNudges = (state, config, logger, messages, prompts, compressio
   if (compressPermission(state, config) === "deny") {
     return;
   }
-  if (state.manualMode) {
+  const { providerId, modelId } = getModelInfo(messages);
+  const { overMaxLimit, overMinLimit } = isContextOverLimits(
+    config,
+    state,
+    providerId,
+    modelId,
+    messages
+  );
+  if (state.manualMode && !overMaxLimit) {
     return;
   }
   if (!createAnchors) {
@@ -6458,15 +6515,7 @@ var injectCompressNudges = (state, config, logger, messages, prompts, compressio
     void saveSessionState(state, logger);
     return;
   }
-  const { providerId, modelId } = getModelInfo(messages);
   let anchorsChanged = false;
-  const { overMaxLimit, overMinLimit } = isContextOverLimits(
-    config,
-    state,
-    providerId,
-    modelId,
-    messages
-  );
   if (!overMinLimit) {
     const hadTurnAnchors = state.nudges.turnNudgeAnchors.size > 0;
     const hadIterationAnchors = state.nudges.iterationNudgeAnchors.size > 0;
@@ -6490,7 +6539,7 @@ var injectCompressNudges = (state, config, logger, messages, prompts, compressio
         anchorsChanged = true;
       }
     }
-  } else if (overMinLimit) {
+  } else if (overMinLimit && !state.manualMode) {
     const isLastMessageUser = lastMessage?.message.info.role === "user";
     if (isLastMessageUser && lastAssistantMessage) {
       const previousSize = state.nudges.turnNudgeAnchors.size;
@@ -7819,6 +7868,17 @@ function createSystemPromptHandler(state, logger, config, prompts) {
     }
   };
 }
+async function lookupModelContextLimit(client, messages) {
+  const { providerId, modelId } = getModelInfo(messages);
+  if (!providerId || !modelId) return void 0;
+  try {
+    const response = await client.config.providers();
+    const provider = response?.data?.providers?.find((p) => p.id === providerId);
+    return provider?.models?.[modelId]?.limit?.context || void 0;
+  } catch {
+    return void 0;
+  }
+}
 function createChatMessageTransformHandler(client, state, logger, config, prompts, hostPermissions) {
   return async (input, output2) => {
     const receivedMessages = Array.isArray(output2.messages) ? output2.messages.length : 0;
@@ -7830,17 +7890,20 @@ function createChatMessageTransformHandler(client, state, logger, config, prompt
       });
     }
     await checkSession(client, state, logger, output2.messages, config.manualMode.enabled);
+    if (state.modelContextLimit === void 0) {
+      state.modelContextLimit = await lookupModelContextLimit(client, output2.messages);
+    }
     syncCompressPermissionState(state, config, hostPermissions, output2.messages);
     if (state.isSubAgent && !config.experimental.allowSubAgents) {
       return;
     }
     stripHallucinations(output2.messages);
     cacheSystemPromptTokens(state, output2.messages);
-    assignMessageRefs(state, output2.messages);
     syncCompressionBlocks(state, logger, output2.messages);
     syncToolCache(state, config, logger, output2.messages);
     buildToolIdList(state, output2.messages);
     prune(state, logger, config, output2.messages);
+    assignMessageRefs(state, output2.messages);
     await injectExtendedSubAgentResults(
       client,
       state,
@@ -7970,6 +8033,14 @@ function createTextCompleteHandler(state) {
 function createEventHandler(state, logger) {
   return async (input) => {
     const eventTime = typeof input.event?.time === "number" && Number.isFinite(input.event.time) ? input.event.time : typeof input.event?.properties?.time === "number" && Number.isFinite(input.event.properties.time) ? input.event.properties.time : void 0;
+    if (input.event.type === "session.deleted") {
+      const sessionId = input.event.properties.info?.id;
+      if (sessionId) {
+        await deleteSessionState(sessionId).catch(() => {
+        });
+      }
+      return;
+    }
     if (input.event.type !== "message.part.updated") {
       return;
     }
@@ -8255,13 +8326,15 @@ function history(entries, session2) {
       ];
     }
     let text;
-    if (entry.type === "user")
+    if (entry.type === "user") {
+      if (isDcpChatText(entry.text)) return [];
       text = [
         ...(entry.skills ?? []).flatMap(
           (skill) => skill.text === void 0 ? [] : [skill.text]
         ),
         entry.text
       ].join("\n\n");
+    }
     if (entry.type === "synthetic" || entry.type === "skill") text = entry.text;
     if (entry.type === "location-switched")
       text = `The working directory has been changed to ${entry.location.directory}.`;
@@ -8348,8 +8421,16 @@ function project(native, entries, session2) {
       parts.push({ ...base, id: `${message.id}:step`, type: "step-start" });
     for (const [index, part] of message.content.entries()) {
       let projected2;
-      if (part.type === "text")
-        projected2 = { ...base, id: `${message.id}:${index}`, type: "text", text: part.text };
+      if (part.type === "text") {
+        const dropped = message.role === "user" && (isDcpChatText(part.text) || part.ignored === true);
+        projected2 = {
+          ...base,
+          id: `${message.id}:${index}`,
+          type: "text",
+          text: part.text,
+          ...dropped ? { ignored: true } : {}
+        };
+      }
       if (part.type === "media") {
         const { source, mediaType } = part.media;
         projected2 = {
@@ -8426,9 +8507,10 @@ function project(native, entries, session2) {
         if (part.type === "tool-result" && originals.has(owners.get(part)) && !retained.has(owners.get(part)))
           continue;
         const edit = links.get(part);
-        if (part.type === "text" && edit?.type === "text")
+        if (part.type === "text" && edit?.type === "text") {
+          if (edit.ignored) continue;
           content.push({ ...part, text: edit.text });
-        else if (part.type === "tool-call" && edit?.type === "tool")
+        } else if (part.type === "tool-call" && edit?.type === "tool")
           content.push({ ...part, input: edit.state.input });
         else if (part.type === "tool-result" && edit?.type === "tool" && edit.state.status === "completed" && typeof edit.state.output === "string" && edit.state.output !== part.result.value) {
           content.push({ ...part, result: { type: "text", value: edit.state.output } });
@@ -8489,12 +8571,33 @@ var rpc = {
     },
     manual: { input: session.extend({ enabled: z.boolean() }), output: z.object({}) }
   },
-  events: {}
+  // Server -> TUI notifications (prune/compress reports, command output).
+  // Ephemeral by design: nothing is stored, nothing enters model context.
+  events: {
+    notify: {
+      schema: z.object({
+        title: z.string(),
+        message: z.string(),
+        variant: z.enum(["info", "success", "warning", "error"]).optional(),
+        duration: z.number().optional()
+      })
+    }
+  }
 };
 
 // lib/v2/index.ts
+var emitNotify;
+var REPORT_TOAST_MAX_CHARS = 2e3;
 async function report(logger, text, sessionID) {
-  logger.debug("V2 report (display pending)", { sessionID, text });
+  logger.debug("V2 report", { sessionID, text });
+  if (!emitNotify || !text) return;
+  const message = text.length > REPORT_TOAST_MAX_CHARS ? `${text.slice(0, REPORT_TOAST_MAX_CHARS)}
+... (truncated, ${text.length} chars total)` : text;
+  try {
+    await emitNotify({ title: "DCP", message });
+  } catch (cause) {
+    logger.debug("V2 report emit failed", { error: String(cause) });
+  }
 }
 async function setup(ctx) {
   const warnings = {
@@ -8616,10 +8719,11 @@ async function setup(ctx) {
           event.agent
         );
         if (state.isSubAgent && !config.experimental.allowSubAgents) {
-          delete event.tools.compress;
+          if (event.tools?.compress) delete event.tools.compress;
           return;
         }
-        if (state.compressPermission === "deny") delete event.tools.compress;
+        if (event.tools?.compress && state.compressPermission === "deny")
+          delete event.tools.compress;
         state.modelContextLimit = limits.get(`${event.model.providerID}/${event.model.id}`);
         state.systemPromptTokens = countTokens(
           event.system.map((part) => part.text).join("\n")
@@ -8785,6 +8889,8 @@ async function setup(ctx) {
       await saveSessionState(state, logger);
       return {};
     })
+  }).then((registration) => {
+    emitNotify = (event) => registration.events.emit("notify", event);
   });
   logger.info("DCP V2 initialized");
   return () => {
