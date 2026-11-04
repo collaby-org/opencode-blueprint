@@ -2974,7 +2974,10 @@ async function saveSessionState(sessionState, logger, sessionName) {
     }
     const state = {
       sessionName,
-      manualMode: !!sessionState.manualMode,
+      // Persist the full tri-state: coercing to a boolean here leaked an
+      // in-flight `/dcp-compress` trigger as "manual mode ON" and it was
+      // re-armed by refreshManualMode on the next turn.
+      manualMode: sessionState.manualMode,
       prune: {
         tools: Object.fromEntries(sessionState.prune.tools),
         messages: serializePruneMessagesState(sessionState.prune.messages)
@@ -3091,7 +3094,17 @@ function emptyPersistedState(manualMode) {
 }
 async function loadManualModeSetting(sessionId, logger) {
   const state = await loadSessionState(sessionId, logger);
-  return typeof state?.manualMode === "boolean" ? state.manualMode : void 0;
+  const manualMode = state?.manualMode;
+  if (manualMode === "compress-pending") {
+    return void 0;
+  }
+  if (manualMode === "active") {
+    return true;
+  }
+  if (typeof manualMode === "boolean") {
+    return manualMode;
+  }
+  return false;
 }
 async function saveManualModeSetting(sessionId, manualMode, logger) {
   const existing = await loadSessionState(sessionId, logger);
@@ -3299,8 +3312,8 @@ async function ensureSessionInitialized(client, state, sessionId, logger, messag
   if (persisted === null) {
     return;
   }
-  if (typeof persisted.manualMode === "boolean") {
-    state.manualMode = persisted.manualMode ? "active" : false;
+  if (persisted.manualMode === true || persisted.manualMode === "active" || persisted.manualMode === false) {
+    state.manualMode = persisted.manualMode === "active" || persisted.manualMode === true ? "active" : false;
   }
   state.prune.tools = loadPruneMap(persisted.prune.tools);
   state.prune.messages = loadPruneMessagesState(persisted.prune.messages);
@@ -5845,9 +5858,6 @@ var stripHallucinations = (messages, format2 = "xml") => {
       if (part.type === "text" && typeof part.text === "string") {
         part.text = stripHallucinationsFromString(part.text, format2);
       }
-      if (part.type === "tool" && part.state?.status === "completed" && typeof part.state.output === "string") {
-        part.state.output = stripHallucinationsFromString(part.state.output, format2);
-      }
     }
   }
 };
@@ -6198,6 +6208,7 @@ function listPriorityRefsBeforeIndex(messages, priorities, anchorIndex, priority
 
 // lib/messages/inject/utils.ts
 var MESSAGE_MODE_NUDGE_PRIORITY = "high";
+var PROVIDER_HEADROOM_TOKENS = 2e4;
 function getNudgeFrequency(config) {
   return Math.max(1, Math.floor(config.compress.nudgeFrequency || 1));
 }
@@ -6278,7 +6289,14 @@ function isContextOverLimits(config, state, providerId, modelId, messages) {
     modelId,
     "max"
   );
-  const maxContextLimit = resolvedMaxContextLimit === void 0 ? void 0 : resolvedMaxContextLimit + summaryTokenExtension;
+  const effectiveMaxContextLimit = resolvedMaxContextLimit === void 0 || state.modelContextLimit === void 0 ? resolvedMaxContextLimit : Math.max(
+    0,
+    Math.min(
+      resolvedMaxContextLimit,
+      state.modelContextLimit - PROVIDER_HEADROOM_TOKENS
+    )
+  );
+  const maxContextLimit = effectiveMaxContextLimit === void 0 ? void 0 : effectiveMaxContextLimit + summaryTokenExtension;
   const minContextLimit = resolveContextTokenLimit(config, state, providerId, modelId, "min");
   const currentTokens = getCurrentTokenUsage(state, messages);
   const overMaxLimit = maxContextLimit === void 0 ? false : currentTokens > maxContextLimit;
@@ -6442,7 +6460,15 @@ var injectCompressNudges = (state, config, logger, messages, prompts, compressio
   if (compressPermission(state, config) === "deny") {
     return;
   }
-  if (state.manualMode) {
+  const { providerId, modelId } = getModelInfo(messages);
+  const { overMaxLimit, overMinLimit } = isContextOverLimits(
+    config,
+    state,
+    providerId,
+    modelId,
+    messages
+  );
+  if (state.manualMode && !overMaxLimit) {
     return;
   }
   if (!createAnchors) {
@@ -6458,15 +6484,7 @@ var injectCompressNudges = (state, config, logger, messages, prompts, compressio
     void saveSessionState(state, logger);
     return;
   }
-  const { providerId, modelId } = getModelInfo(messages);
   let anchorsChanged = false;
-  const { overMaxLimit, overMinLimit } = isContextOverLimits(
-    config,
-    state,
-    providerId,
-    modelId,
-    messages
-  );
   if (!overMinLimit) {
     const hadTurnAnchors = state.nudges.turnNudgeAnchors.size > 0;
     const hadIterationAnchors = state.nudges.iterationNudgeAnchors.size > 0;
@@ -6490,7 +6508,7 @@ var injectCompressNudges = (state, config, logger, messages, prompts, compressio
         anchorsChanged = true;
       }
     }
-  } else if (overMinLimit) {
+  } else if (overMinLimit && !state.manualMode) {
     const isLastMessageUser = lastMessage?.message.info.role === "user";
     if (isLastMessageUser && lastAssistantMessage) {
       const previousSize = state.nudges.turnNudgeAnchors.size;
@@ -8616,10 +8634,11 @@ async function setup(ctx) {
           event.agent
         );
         if (state.isSubAgent && !config.experimental.allowSubAgents) {
-          delete event.tools.compress;
+          if (event.tools?.compress) delete event.tools.compress;
           return;
         }
-        if (state.compressPermission === "deny") delete event.tools.compress;
+        if (event.tools?.compress && state.compressPermission === "deny")
+          delete event.tools.compress;
         state.modelContextLimit = limits.get(`${event.model.providerID}/${event.model.id}`);
         state.systemPromptTokens = countTokens(
           event.system.map((part) => part.text).join("\n")

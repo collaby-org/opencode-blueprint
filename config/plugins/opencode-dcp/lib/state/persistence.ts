@@ -35,7 +35,12 @@ export interface PersistedNudges {
 
 export interface PersistedSessionState {
     sessionName?: string
-    manualMode?: boolean
+    /**
+     * Tri-state, mirroring `SessionState["manualMode"]`. A transient
+     * `"compress-pending"` value used to be coerced to `true` on every
+     * concurrent write, which re-armed manual mode for the whole session.
+     */
+    manualMode?: false | "active" | "compress-pending"
     prune: PersistedPrune
     nudges: PersistedNudges
     stats: SessionStats
@@ -89,7 +94,10 @@ export async function saveSessionState(
 
         const state: PersistedSessionState = {
             sessionName: sessionName,
-            manualMode: !!sessionState.manualMode,
+            // Persist the full tri-state: coercing to a boolean here leaked an
+            // in-flight `/dcp-compress` trigger as "manual mode ON" and it was
+            // re-armed by refreshManualMode on the next turn.
+            manualMode: sessionState.manualMode,
             prune: {
                 tools: Object.fromEntries(sessionState.prune.tools),
                 messages: serializePruneMessagesState(sessionState.prune.messages),
@@ -205,7 +213,7 @@ export async function loadSessionState(
     }
 }
 
-function emptyPersistedState(manualMode: boolean): PersistedSessionState {
+function emptyPersistedState(manualMode: SessionState["manualMode"]): PersistedSessionState {
     return {
         manualMode,
         prune: {
@@ -232,17 +240,36 @@ function emptyPersistedState(manualMode: boolean): PersistedSessionState {
     }
 }
 
+/**
+ * Reads the persisted manual-mode setting.
+ *
+ * Return contract:
+ * - `true` / `"active"` -> `true` (manual mode is on)
+ * - `"compress-pending"` -> `undefined` (transient in-flight trigger: it must
+ *   never re-arm manual mode, so fall back to the configured default)
+ * - anything else (missing file, `false`, garbage) -> `false`
+ */
 export async function loadManualModeSetting(
     sessionId: string,
     logger: Logger,
 ): Promise<boolean | undefined> {
     const state = await loadSessionState(sessionId, logger)
-    return typeof state?.manualMode === "boolean" ? state.manualMode : undefined
+    const manualMode = state?.manualMode
+    if (manualMode === "compress-pending") {
+        return undefined
+    }
+    if (manualMode === "active") {
+        return true
+    }
+    if (typeof manualMode === "boolean") {
+        return manualMode
+    }
+    return false
 }
 
 export async function saveManualModeSetting(
     sessionId: string,
-    manualMode: boolean,
+    manualMode: SessionState["manualMode"],
     logger: Logger,
 ): Promise<void> {
     const existing = await loadSessionState(sessionId, logger)
