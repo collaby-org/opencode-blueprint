@@ -31,6 +31,7 @@ import { matchesGlob } from "../protected-patterns"
 import { history, project, relocateSystemRemindersToSystem } from "./messages"
 import { analyzeContextTokens } from "../commands/context"
 import { buildStatsReport } from "../commands/stats"
+import { appendNotify } from "../ui/notify-queue"
 import { rpc } from "./rpc"
 
 // V2 reports become ephemeral rpc events that the TUI plugin renders as
@@ -43,7 +44,7 @@ let emitNotify:
           message: string
           variant?: "info" | "success" | "warning" | "error"
           duration?: number
-      }) => Promise<void>)
+      }) => unknown)
     | undefined
 
 const REPORT_TOAST_MAX_CHARS = 2000
@@ -398,8 +399,18 @@ export async function setup(ctx: Plugin.Context) {
                 return {}
             }),
     })
-        .then((registration) => {
-            emitNotify = (event) => registration.events.emit("notify", event)
+        .then((registration: unknown) => {
+            // Newer plugin SDKs expose a server → TUI event bus on the
+            // registration; opencode 2.2.x (plugin SDK 1.19.x) does not, so
+            // reports fall back to the file queue the TUI plugin polls.
+            const bus = (
+                registration as {
+                    events?: { emit: (name: string, data: unknown) => Promise<void> | void }
+                }
+            )?.events
+            emitNotify = bus?.emit
+                ? (event) => bus.emit("notify", event)
+                : (event) => appendNotify(event)
         })
     logger.info("DCP V2 initialized")
     return () => {

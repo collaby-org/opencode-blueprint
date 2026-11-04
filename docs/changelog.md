@@ -9,6 +9,24 @@ Version 1.0.0 was published to npm but never got a git tag, so it has no tag
 range. The npm publish timestamps are UTC and can sit a day earlier than the
 commit date of the same version.
 
+## [1.5.0] - 2026-11-04
+
+### Added
+
+- Compression and prune reports now surface as desktop toasts on opencode
+  2.2.x. The upstream #627 report/notify slice had a silent gap on this host:
+  the vendored plugin SDK (1.19.x) exposes no server → TUI event bus
+  (`registration.events` is absent) and no `ctx.ui.toast.show` / `ctx.data.on`
+  in the TUI plugin, so the ported toast pair degraded to a debug log and
+  compressions completed with no visible feedback. DCP now writes each report
+  to a small file queue under `~/.local/share/opencode/storage/plugin/dcp/notify/`
+  and the TUI plugin polls it and renders records through the toast API the
+  host actually provides (`api.ui.toast`), deleting each record after it
+  renders; stale records (older than 60 s) are dropped so a host restart never
+  replays old toasts, and the queue self-prunes after 6 hours. The rpc event
+  path stays primary on future hosts that provide the event bus, with the
+  queue as automatic fallback.
+
 ## [1.4.9] - 2026-11-04
 
 ### Added

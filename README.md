@@ -38,7 +38,7 @@ npx opencode-blueprint
 - **1** Agents — the orchestrator
 - **4** CI workflows — pinned to commit SHAs
 - **14** Repo templates — the baseline every repo gets
-- **v1.4.9** Version — in package.json; published on release
+- **v1.5.0** Version — in package.json; published on release
 
 <!-- stats:end -->
 
