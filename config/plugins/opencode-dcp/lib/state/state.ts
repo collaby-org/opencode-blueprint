@@ -171,8 +171,17 @@ export async function ensureSessionInitialized(
         return
     }
 
-    if (typeof persisted.manualMode === "boolean") {
-        state.manualMode = persisted.manualMode ? "active" : false
+    // Hydrate the full manual-mode value. A `"compress-pending"` trigger is
+    // in-flight state that must never survive a process restart, so it hydrates
+    // to `false`; legacy boolean files keep their previous meaning.
+    if (
+        persisted.manualMode === true ||
+        persisted.manualMode === "active" ||
+        persisted.manualMode === false
+    ) {
+        state.manualMode = persisted.manualMode === "active" || persisted.manualMode === true
+            ? "active"
+            : false
     }
 
     state.prune.tools = loadPruneMap(persisted.prune.tools)
