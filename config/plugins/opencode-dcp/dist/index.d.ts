@@ -1,9 +1,12 @@
-import type { Plugin } from "@opencode-ai/plugin";
-import { setup } from "./lib/v2";
+import { Plugin as Plugin$1 } from '@opencode-ai/plugin';
+import { Plugin } from '@opencode/plugin';
+
+declare function setup(ctx: Plugin.Context): Promise<(() => void) | undefined>;
+
 declare const _default: {
     id: string;
     setup: typeof setup;
-    server: Plugin;
+    server: Plugin$1;
 };
-export default _default;
-//# sourceMappingURL=index.d.ts.map
+
+export { _default as default };

@@ -8526,6 +8526,48 @@ function project(native, entries, session2) {
   return { messages, restore, summaryBase };
 }
 
+// lib/ui/notify-queue.ts
+import * as fs2 from "fs/promises";
+import { existsSync as existsSync5 } from "fs";
+import { homedir as homedir5 } from "os";
+import { join as join6 } from "path";
+function dataRoot() {
+  return process.env.XDG_DATA_HOME || join6(homedir5(), ".local", "share");
+}
+function notifyDirPath() {
+  return join6(dataRoot(), "opencode", "storage", "plugin", "dcp", "notify");
+}
+var appendCounter = 0;
+function notifyFileName(ms) {
+  appendCounter = (appendCounter + 1) % 1e4;
+  return `${String(ms).padStart(15, "0")}-${String(appendCounter).padStart(4, "0")}.json`;
+}
+async function appendNotify(event) {
+  const dir = notifyDirPath();
+  if (!existsSync5(dir)) await fs2.mkdir(dir, { recursive: true });
+  const id = notifyFileName(Date.now());
+  const record = { ...event, id };
+  await fs2.writeFile(join6(dir, id), JSON.stringify(record), "utf8");
+  await pruneOld(dir);
+  return id;
+}
+function parseId(name) {
+  const n = Number.parseInt(name.split("-")[0] || "", 10);
+  return Number.isFinite(n) ? n : 0;
+}
+async function pruneOld(dir, maxAgeMs = 6 * 60 * 60 * 1e3) {
+  try {
+    const cutoff = Date.now() - maxAgeMs;
+    for (const name of await fs2.readdir(dir)) {
+      if (!name.endsWith(".json")) continue;
+      if (parseId(name) < cutoff) {
+        await fs2.rm(join6(dir, name), { force: true });
+      }
+    }
+  } catch {
+  }
+}
+
 // lib/v2/rpc.ts
 import { tool as tool3 } from "@opencode-ai/plugin";
 var z = tool3.schema;
@@ -8890,7 +8932,8 @@ async function setup(ctx) {
       return {};
     })
   }).then((registration) => {
-    emitNotify = (event) => registration.events.emit("notify", event);
+    const bus = registration?.events;
+    emitNotify = bus?.emit ? (event) => bus.emit("notify", event) : (event) => appendNotify(event);
   });
   logger.info("DCP V2 initialized");
   return () => {
