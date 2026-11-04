@@ -8861,6 +8861,7 @@ async function setup(ctx) {
             Date.now() - started
           );
           await saveSessionState(state, logger);
+          await report(logger, content, context2.sessionID);
           return { content };
         })
       })
