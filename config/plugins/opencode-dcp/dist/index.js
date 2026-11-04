@@ -1708,9 +1708,20 @@ function getCurrentTokenUsage(state, messages) {
     const reasoning = assistantInfo.tokens?.reasoning || 0;
     const cacheRead = assistantInfo.tokens?.cache?.read || 0;
     const cacheWrite = assistantInfo.tokens?.cache?.write || 0;
-    return input + output2 + reasoning + cacheRead + cacheWrite;
+    const reportedUsage = input + output2 + reasoning + cacheRead + cacheWrite;
+    return Math.max(reportedUsage, estimateCurrentMessageTokenUsage(state, messages));
   }
   return 0;
+}
+function estimateCurrentMessageTokenUsage(state, messages) {
+  let total = 0;
+  for (const msg of messages) {
+    if (state.lastCompaction > 0 && (msg.info.time.created < state.lastCompaction || msg.info.summary === true && msg.info.time.created === state.lastCompaction)) {
+      continue;
+    }
+    total += countAllMessageTokens(msg);
+  }
+  return total;
 }
 function getCurrentParams(state, messages, logger) {
   const userMsg = getLastUserMessage(messages);
@@ -2939,6 +2950,13 @@ function resetOnCompaction(state) {
     turnNudgeAnchors: /* @__PURE__ */ new Set(),
     iterationNudgeAnchors: /* @__PURE__ */ new Set()
   };
+  state.stats = {
+    pruneTokenCounter: 0,
+    totalPruneTokens: 0
+  };
+  state.systemPromptTokens = void 0;
+  state.compressionTiming.startsByCallId.clear();
+  state.compressionTiming.pendingByCallId.clear();
 }
 
 // lib/state/persistence.ts
@@ -3062,6 +3080,10 @@ async function loadSessionState(sessionId, logger) {
     });
     return null;
   }
+}
+async function deleteSessionState(sessionId) {
+  const filePath = getSessionFilePath(sessionId);
+  await fs.unlink(filePath);
 }
 function emptyPersistedState(manualMode) {
   return {
@@ -5845,9 +5867,6 @@ var stripHallucinations = (messages, format2 = "xml") => {
       if (part.type === "text" && typeof part.text === "string") {
         part.text = stripHallucinationsFromString(part.text, format2);
       }
-      if (part.type === "tool" && part.state?.status === "completed" && typeof part.state.output === "string") {
-        part.state.output = stripHallucinationsFromString(part.state.output, format2);
-      }
     }
   }
 };
@@ -7819,6 +7838,17 @@ function createSystemPromptHandler(state, logger, config, prompts) {
     }
   };
 }
+async function lookupModelContextLimit(client, messages) {
+  const { providerId, modelId } = getModelInfo(messages);
+  if (!providerId || !modelId) return void 0;
+  try {
+    const response = await client.config.providers();
+    const provider = response?.data?.providers?.find((p) => p.id === providerId);
+    return provider?.models?.[modelId]?.limit?.context || void 0;
+  } catch {
+    return void 0;
+  }
+}
 function createChatMessageTransformHandler(client, state, logger, config, prompts, hostPermissions) {
   return async (input, output2) => {
     const receivedMessages = Array.isArray(output2.messages) ? output2.messages.length : 0;
@@ -7830,17 +7860,20 @@ function createChatMessageTransformHandler(client, state, logger, config, prompt
       });
     }
     await checkSession(client, state, logger, output2.messages, config.manualMode.enabled);
+    if (state.modelContextLimit === void 0) {
+      state.modelContextLimit = await lookupModelContextLimit(client, output2.messages);
+    }
     syncCompressPermissionState(state, config, hostPermissions, output2.messages);
     if (state.isSubAgent && !config.experimental.allowSubAgents) {
       return;
     }
     stripHallucinations(output2.messages);
     cacheSystemPromptTokens(state, output2.messages);
-    assignMessageRefs(state, output2.messages);
     syncCompressionBlocks(state, logger, output2.messages);
     syncToolCache(state, config, logger, output2.messages);
     buildToolIdList(state, output2.messages);
     prune(state, logger, config, output2.messages);
+    assignMessageRefs(state, output2.messages);
     await injectExtendedSubAgentResults(
       client,
       state,
@@ -7970,6 +8003,14 @@ function createTextCompleteHandler(state) {
 function createEventHandler(state, logger) {
   return async (input) => {
     const eventTime = typeof input.event?.time === "number" && Number.isFinite(input.event.time) ? input.event.time : typeof input.event?.properties?.time === "number" && Number.isFinite(input.event.properties.time) ? input.event.properties.time : void 0;
+    if (input.event.type === "session.deleted") {
+      const sessionId = input.event.properties.info?.id;
+      if (sessionId) {
+        await deleteSessionState(sessionId).catch(() => {
+        });
+      }
+      return;
+    }
     if (input.event.type !== "message.part.updated") {
       return;
     }
@@ -8616,10 +8657,11 @@ async function setup(ctx) {
           event.agent
         );
         if (state.isSubAgent && !config.experimental.allowSubAgents) {
-          delete event.tools.compress;
+          if (event.tools?.compress) delete event.tools.compress;
           return;
         }
-        if (state.compressPermission === "deny") delete event.tools.compress;
+        if (event.tools?.compress && state.compressPermission === "deny")
+          delete event.tools.compress;
         state.modelContextLimit = limits.get(`${event.model.providerID}/${event.model.id}`);
         state.systemPromptTokens = countTokens(
           event.system.map((part) => part.text).join("\n")
