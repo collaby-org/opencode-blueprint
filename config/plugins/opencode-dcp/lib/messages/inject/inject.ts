@@ -43,7 +43,22 @@ export const injectCompressNudges = (
         return
     }
 
-    if (state.manualMode) {
+    const { providerId, modelId } = getModelInfo(messages)
+    const { overMaxLimit, overMinLimit } = isContextOverLimits(
+        config,
+        state,
+        providerId,
+        modelId,
+        messages,
+    )
+
+    // Hard wall for manual mode: manual mode suppresses the soft turn/iteration
+    // nudges, but never the provider window-limit one. Returning early for any
+    // truthy manualMode meant a stuck `"compress-pending"` value (or a leaked
+    // persisted one) also cancelled the context-limit anchor, so once the
+    // context grew past the provider's window every request was rejected with
+    // `context_length` exceeded and no compress tool call could ever succeed.
+    if (state.manualMode && !overMaxLimit) {
         return
     }
 
@@ -63,16 +78,9 @@ export const injectCompressNudges = (
         return
     }
 
-    const { providerId, modelId } = getModelInfo(messages)
+    // `providerId`/`modelId` and the limit checks were hoisted above the
+    // manual-mode wall, so they are computed once here.
     let anchorsChanged = false
-
-    const { overMaxLimit, overMinLimit } = isContextOverLimits(
-        config,
-        state,
-        providerId,
-        modelId,
-        messages,
-    )
 
     if (!overMinLimit) {
         const hadTurnAnchors = state.nudges.turnNudgeAnchors.size > 0
@@ -99,7 +107,7 @@ export const injectCompressNudges = (
                 anchorsChanged = true
             }
         }
-    } else if (overMinLimit) {
+    } else if (overMinLimit && !state.manualMode) {
         const isLastMessageUser = lastMessage?.message.info.role === "user"
 
         if (isLastMessageUser && lastAssistantMessage) {

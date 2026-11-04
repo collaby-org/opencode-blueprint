@@ -36,8 +36,15 @@ import {
 } from "./commands"
 import { type HostPermissionSnapshot } from "./host-permissions"
 import { compressPermission, syncCompressPermissionState } from "./compress-permission"
-import { checkSession, ensureSessionInitialized, saveSessionState, syncToolCache } from "./state"
+import {
+    checkSession,
+    deleteSessionState,
+    ensureSessionInitialized,
+    saveSessionState,
+    syncToolCache,
+} from "./state"
 import { cacheSystemPromptTokens } from "./ui/utils"
+import { getModelInfo } from "./messages/inject/utils"
 
 const INTERNAL_AGENT_SIGNATURES = [
     "You are a title generator",
@@ -104,6 +111,23 @@ export function createSystemPromptHandler(
     }
 }
 
+// Messages are transformed before the system prompt hook reports the model limit,
+// so the first request of a fresh process would otherwise see no limit and nudge.
+async function lookupModelContextLimit(
+    client: any,
+    messages: WithParts[],
+): Promise<number | undefined> {
+    const { providerId, modelId } = getModelInfo(messages)
+    if (!providerId || !modelId) return undefined
+    try {
+        const response = await client.config.providers()
+        const provider = response?.data?.providers?.find((p: any) => p.id === providerId)
+        return provider?.models?.[modelId]?.limit?.context || undefined
+    } catch {
+        return undefined
+    }
+}
+
 export function createChatMessageTransformHandler(
     client: any,
     state: SessionState,
@@ -124,6 +148,10 @@ export function createChatMessageTransformHandler(
 
         await checkSession(client, state, logger, output.messages, config.manualMode.enabled)
 
+        if (state.modelContextLimit === undefined) {
+            state.modelContextLimit = await lookupModelContextLimit(client, output.messages)
+        }
+
         syncCompressPermissionState(state, config, hostPermissions, output.messages)
 
         if (state.isSubAgent && !config.experimental.allowSubAgents) {
@@ -132,11 +160,14 @@ export function createChatMessageTransformHandler(
 
         stripHallucinations(output.messages)
         cacheSystemPromptTokens(state, output.messages)
-        assignMessageRefs(state, output.messages)
         syncCompressionBlocks(state, logger, output.messages)
         syncToolCache(state, config, logger, output.messages)
         buildToolIdList(state, output.messages)
         prune(state, logger, config, output.messages)
+        // Refs are assigned after prune so a message removed by prune never gets an
+        // alias: an alias with no live message widens the byRef map every turn until
+        // the ID alias capacity is exceeded (#549).
+        assignMessageRefs(state, output.messages)
         await injectExtendedSubAgentResults(
             client,
             state,
@@ -313,6 +344,14 @@ export function createEventHandler(state: SessionState, logger: Logger) {
                     Number.isFinite(input.event.properties.time)
                   ? input.event.properties.time
                   : undefined
+
+        if (input.event.type === "session.deleted") {
+            const sessionId = input.event.properties.info?.id
+            if (sessionId) {
+                await deleteSessionState(sessionId).catch(() => {})
+            }
+            return
+        }
 
         if (input.event.type !== "message.part.updated") {
             return

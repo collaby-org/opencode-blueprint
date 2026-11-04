@@ -24,6 +24,15 @@ import { getActiveSummaryTokenUsage } from "../../state/utils"
 
 const MESSAGE_MODE_NUDGE_PRIORITY: MessagePriority = "high"
 
+/**
+ * Tokens of headroom kept between the effective max-context threshold and the
+ * provider's context window. Scheduling the compress nudge exactly at the
+ * window limit is useless: the provider rejects the outgoing request with
+ * `context_length exceeded` before the compress tool call can ever run, so the
+ * nudge has to fire early enough that the next turn still fits.
+ */
+const PROVIDER_HEADROOM_TOKENS = 20000
+
 export interface LastUserModelContext {
     providerId: string | undefined
     modelId: string | undefined
@@ -146,10 +155,26 @@ export function isContextOverLimits(
         modelId,
         "max",
     )
+    // The configured limit is a fixed default (`compress.maxContextLimit`)
+    // that knows nothing about the active provider's window, so it can point
+    // past it. Clamp it to `provider window - PROVIDER_HEADROOM_TOKENS` so the
+    // compress nudge can never be scheduled later than that: once the window is
+    // full the provider rejects the request with `context_length exceeded` and
+    // the nudge for that turn is never seen.
+    const effectiveMaxContextLimit =
+        resolvedMaxContextLimit === undefined || state.modelContextLimit === undefined
+            ? resolvedMaxContextLimit
+            : Math.max(
+                  0,
+                  Math.min(
+                      resolvedMaxContextLimit,
+                      state.modelContextLimit - PROVIDER_HEADROOM_TOKENS,
+                  ),
+              )
     const maxContextLimit =
-        resolvedMaxContextLimit === undefined
+        effectiveMaxContextLimit === undefined
             ? undefined
-            : resolvedMaxContextLimit + summaryTokenExtension
+            : effectiveMaxContextLimit + summaryTokenExtension
     const minContextLimit = resolveContextTokenLimit(config, state, providerId, modelId, "min")
     const currentTokens = getCurrentTokenUsage(state, messages)
 

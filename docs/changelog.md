@@ -9,6 +9,41 @@ Version 1.0.0 was published to npm but never got a git tag, so it has no tag
 range. The npm publish timestamps are UTC and can sit a day earlier than the
 commit date of the same version.
 
+## [1.4.9] - 2026-11-04
+
+### Added
+
+- Upstream #627 notify slice: the DCP `report()` path now emits an `rpc.dcp.notify`
+  event on the opencode V2 server-plugin path and the V2 TUI shows a compression
+  toast (feature-detected); DCP's own synthetic/ignored chat entries are hidden
+  from restored V2 session history and marked in text with a `▣ DCP` marker.
+
+### Fixed
+
+- A manual `/dcp-compress` trigger no longer leaks into a permanent manual-mode
+  latch. The transient `compress-pending` state was coerced to `true` on every
+  concurrent state save, re-arming manual mode from the persisted setting on
+  the next turn; with manual mode armed, `injectCompressNudges` returns early,
+  so no compression nudges are ever scheduled and the context grows into the
+  provider's rejection zone where no turn (including a compress attempt) can
+  succeed. The persisted state now holds the real tri-state value and a
+  `compress-pending` restore falls back to the configured default. This is
+  where the NVIDIA `Invalid request ... context_length` failures at the end
+  of a main-chat session came from (observed: `limit 262144, actual 276018`).
+- A provider hard-wall now clamps the effective compress threshold: the
+  nudge can never be scheduled in the last 20000 tokens of the known model
+  window, and in manual mode the context-limit compression anchor still
+  fires past that threshold (only the soft turn/iteration nudges stay
+  suppressed, which is what manual mode is for).
+- Upstream port wave (unmerged PRs from
+  `Tarquinen/opencode-dynamic-context-pruning`): #670 resolves the model
+  context limit before nudging on a fresh process; #582 estimates the tokens
+  of messages sent after the last usage frame; #569 assigns message refs
+  after prune (orphan alias leak, upstream issue #549); #564 resets stale
+  stats and timing maps on compaction; #559 deletes the DCP state file when
+  the session is deleted; #616 gets regression tests for the mis-wrapped
+  compress-args coercion (lib port was already identical upstream).
+
 ## [1.4.8] - 2026-11-03
 
 ### Fixed
