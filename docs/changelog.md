@@ -9,13 +9,23 @@ Version 1.0.0 was published to npm but never got a git tag, so it has no tag
 range. The npm publish timestamps are UTC and can sit a day earlier than the
 commit date of the same version.
 
+## [1.5.1] - 2026-11-04
+
+### Fixed
+
+- Compress completions now reach the notify transport: the compress tool
+  handler reports its one-line result (`Compressed N messages intoâ€¦`) after
+  saving session state, which the TUI plugin renders as a `DCP` toast
+  (`Compressed N messages intoâ€¦`, part of the 1.5.0 file-queue addition).
+  Previously `report()` was only wired to the TUI command path, so completed
+  compressions still produced no visible toast.
 ## [1.5.0] - 2026-11-04
 
 ### Added
 
 - Compression and prune reports now surface as desktop toasts on opencode
   2.2.x. The upstream #627 report/notify slice had a silent gap on this host:
-  the vendored plugin SDK (1.19.x) exposes no server → TUI event bus
+  the vendored plugin SDK (1.19.x) exposes no server Ã¢â€ â€™ TUI event bus
   (`registration.events` is absent) and no `ctx.ui.toast.show` / `ctx.data.on`
   in the TUI plugin, so the ported toast pair degraded to a debug log and
   compressions completed with no visible feedback. DCP now writes each report
@@ -34,7 +44,7 @@ commit date of the same version.
 - Upstream #627 notify slice: the DCP `report()` path now emits an `rpc.dcp.notify`
   event on the opencode V2 server-plugin path and the V2 TUI shows a compression
   toast (feature-detected); DCP's own synthetic/ignored chat entries are hidden
-  from restored V2 session history and marked in text with a `▣ DCP` marker.
+  from restored V2 session history and marked in text with a `Ã¢â€“Â£ DCP` marker.
 
 ### Fixed
 
@@ -166,8 +176,8 @@ commit date of the same version.
   `OpenAI Chat stream ended without finish_reason` (`incomplete-stream`) when
   the stream stops without that frame, and accepts nothing else; a compaction
   summary is the largest request a session makes, so it hit it first. The
-  template now ships a `providers.nvidia` override —
-  `compatibility.requireFinishReason: false` and a ten minute `chunkTimeout` —
+  template now ships a `providers.nvidia` override Ã¢â‚¬â€
+  `compatibility.requireFinishReason: false` and a ten minute `chunkTimeout` Ã¢â‚¬â€
   with the trade-off recorded in the file: a genuinely truncated NVIDIA reply
   is then reported as `stop`.
 
@@ -231,11 +241,11 @@ commit date of the same version.
   can read a broken one. A file is staged outside the directories the host
   scans and renamed over the destination in one step; when another process
   holds the destination open, the install retries briefly and then keeps the
-  old file and reports it — a stale config beats an absent one. A tree is
+  old file and reports it Ã¢â‚¬â€ a stale config beats an absent one. A tree is
   staged whole and copied over the destination file by file, so the
   destination stays present throughout. The remove-then-copy, and the plain
   rewrite the MCP repoint used, left a window in which the host could read an
-  empty `opencode.jsonc` — and an empty config takes every plugin, MCP and
+  empty `opencode.jsonc` Ã¢â‚¬â€ and an empty config takes every plugin, MCP and
   agent with it, which is what left the host without `oh-my-opencode-slim` and
   with two MCPs. A tree whose copy fails now leaves the destination alone, the
   staging area is removed when the run ends, a link or a directory the user
@@ -256,7 +266,7 @@ commit date of the same version.
   system drive unless the repository itself is there, and never inside the
   repository's own location.
 - `AGENTS.md`: every change lands through a new pull request. The branch is
-  pushed — a pull request that only exists on this machine is not done — and
+  pushed Ã¢â‚¬â€ a pull request that only exists on this machine is not done Ã¢â‚¬â€ and
   merging stays the human's decision.
 - Parallel work leans sequential by default: most coding work has fewer
   independent units than research, and a multi-agent run costs far more. The
@@ -272,7 +282,7 @@ commit date of the same version.
 
 ### Added
 
-- `repo-standards` skill: the baseline every repository carries — `AGENTS.md`,
+- `repo-standards` skill: the baseline every repository carries Ã¢â‚¬â€ `AGENTS.md`,
   `CONTRIBUTING.md`, `CLAUDE.md` (`@AGENTS.md`), a PR template, issue forms,
   `CODEOWNERS`, `dependabot.yml`, `SECURITY.md`, and SHA-pinned CI and
   secret-scan workflows. `standards.mjs --check` verifies a repository;
@@ -286,7 +296,7 @@ commit date of the same version.
   pointers, with the procedures in the skills that own them.
 - The versioning and docs flow is explicit: one version line per app or
   workstream, one PR one bump, the changelog of the folder that was worked in,
-  and the resolved docs home updated with the change — including a linked
+  and the resolved docs home updated with the change Ã¢â‚¬â€ including a linked
   documentation repository outside the repository.
 - Worktrees live on the dedicated worktree drive, never on the system drive
   and never inside the repository's own location.
@@ -355,8 +365,8 @@ commit date of the same version.
 
 ### Fixed
 
-- The gate reads `ctx.location.directory` — the V2 setup context has no
-  `ctx.directory` — and resolves the session's location per invocation, so a
+- The gate reads `ctx.location.directory` Ã¢â‚¬â€ the V2 setup context has no
+  `ctx.directory` Ã¢â‚¬â€ and resolves the session's location per invocation, so a
   worktree checks its own `.git/code-review/last-result.json` instead of the
   project's. When no location can be resolved it fails closed with a named
   error instead of falling back to the server working directory.
@@ -427,7 +437,7 @@ Published to npm and tagged from the merge commit.
   wrapper that re-exports `opencode-mem/v2`), and the package is pinned in the
   config home (`<config>/package.json`, `opencode-mem@2.32.0`). The Bun loader
   resolves bare imports from `<config>/node_modules`, not from the plugin
-  directory, so a tree next to the wrapper is invisible to it — that, plus an
+  directory, so a tree next to the wrapper is invisible to it Ã¢â‚¬â€ that, plus an
   incomplete cache install missing `@libsql/client` and
   `@huggingface/transformers` after an `ENOSPC`, is why the plugin failed with
   `Cannot find package`. The `plugin` array lists only `oh-my-opencode-slim`
@@ -477,7 +487,7 @@ Published to npm and tagged from the merge commit.
 - The GitHub MCP entry authenticates with a PAT header (`GITHUB_TOKEN` in the
   user environment): the remote endpoint does not support dynamic client
   registration, so OAuth could never complete. The Kubernetes entry is disabled
-  until a kubeconfig context exists — the server exits immediately without one.
+  until a kubeconfig context exists Ã¢â‚¬â€ the server exits immediately without one.
 
 - `AGENTS.md` now requires worktrees under `F:\worktrees\<repo>\<branch>`
   (never inside the repository, never on the system drive), sends every change
@@ -522,7 +532,7 @@ Published to npm and tagged from the merge commit.
 
 - The Kodus team key was removed from the vendored `kodus-review` skill and
   replaced with a placeholder. It was committed to this repository, so it must
-  be rotated on the Kodus side — deleting the file does not un-leak it.
+  be rotated on the Kodus side Ã¢â‚¬â€ deleting the file does not un-leak it.
 - `README.md` no longer claims `files` hygiene in the published tarball; the
   package has no `files` field and ships everything not gitignored.
 - The installer's usage comment named the package `development-base`.
