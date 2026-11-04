@@ -213,6 +213,11 @@ export async function loadSessionState(
     }
 }
 
+export async function deleteSessionState(sessionId: string): Promise<void> {
+    const filePath = getSessionFilePath(sessionId)
+    await fs.unlink(filePath)
+}
+
 function emptyPersistedState(manualMode: SessionState["manualMode"]): PersistedSessionState {
     return {
         manualMode,
